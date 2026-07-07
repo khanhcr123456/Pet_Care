@@ -70,4 +70,17 @@ class BookingService {
       throw Exception('Failed to load appointments: ${response.body}');
     }
   }
+
+  Future<void> cancelAppointment(String token, String appointmentId) async {
+    final response = await http.delete(
+      Uri.parse('${AppConfig.baseUrl}/appointments/$appointmentId'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201 && response.statusCode != 204) {
+      throw Exception('Failed to cancel appointment: ${response.body}');
+    }
+  }
 }

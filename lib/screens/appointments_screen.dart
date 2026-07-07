@@ -75,7 +75,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     final vetName = (appt['vet'] is Map) ? (appt['vet']['fullName'] ?? appt['vet']['name'] ?? 'Bác sĩ') : 'Bác sĩ';
                     final petName = (appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : 'Thú cưng';
                     final serviceName = (appt['service'] is Map) ? (appt['service']['name'] ?? 'Dịch vụ') : 'Dịch vụ';
-                    final status = appt['status'] ?? 'pending';
+                    final status = (appt['status']?.toString().toLowerCase() ?? 'pending');
                     
                     Color statusColor = Colors.orange;
                     String statusText = 'Chờ xác nhận';
@@ -109,17 +109,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      statusText,
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
                                   ),
-                                  child: Text(
-                                    statusText,
-                                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
-                                  ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -146,6 +146,60 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                 Expanded(child: Text('Thú cưng: $petName')),
                               ],
                             ),
+                            if (status != 'completed' && status != 'cancelled') ...[
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Xác nhận hủy'),
+                                        content: const Text('Bạn có chắc chắn muốn hủy lịch khám này không?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, false),
+                                            child: const Text('Không'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, true),
+                                            child: const Text('Có, hủy', style: TextStyle(color: Colors.red)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirm == true) {
+                                      if (!mounted) return;
+                                      try {
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (ctx) => const Center(child: CircularProgressIndicator()),
+                                        );
+                                        final apptId = appt['_id'] ?? appt['id'];
+                                        await BookingService().cancelAppointment(widget.user['token'], apptId);
+                                        if (!mounted) return;
+                                        Navigator.pop(context); // close progress dialog
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hủy lịch thành công')));
+                                        setState(() => _isLoading = true);
+                                        _fetchAppointments();
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        Navigator.pop(context); // close progress dialog
+                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+                                      }
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                    side: const BorderSide(color: Colors.red),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: const Text('Hủy lịch'),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

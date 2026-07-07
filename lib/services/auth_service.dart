@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:pet_care/config/app_config.dart';
 import 'package:pet_care/models/auth_session.dart';
 
@@ -84,6 +85,58 @@ class AuthService {
       return data['data'] ?? [];
     } else {
       throw Exception('Failed to fetch vets: ${response.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> updateProfile(String token, Map<String, dynamic> updateData, {String? avatarPath}) async {
+    if (avatarPath != null) {
+      final request = http.MultipartRequest('PUT', Uri.parse('${AppConfig.baseUrl}/auth/profile'));
+      request.headers['Authorization'] = 'Bearer $token';
+      
+      updateData.forEach((key, value) {
+        request.fields[key] = value.toString();
+      });
+
+      final ext = avatarPath.split('.').last.toLowerCase();
+      String subtype = 'jpeg';
+      if (ext == 'png') subtype = 'png';
+      else if (ext == 'gif') subtype = 'gif';
+      else if (ext == 'webp') subtype = 'webp';
+      else if (ext == 'jpg') subtype = 'jpeg';
+
+      request.files.add(await http.MultipartFile.fromPath(
+        'avatar', 
+        avatarPath,
+        contentType: MediaType('image', subtype),
+      ));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update profile: ${response.body}');
+      }
+
+      final decoded = jsonDecode(response.body);
+      final data = decoded['data'] ?? decoded;
+      return Map<String, dynamic>.from(data is Map ? data : {});
+    } else {
+      final response = await http.put(
+        Uri.parse('${AppConfig.baseUrl}/auth/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(updateData),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update profile: ${response.body}');
+      }
+
+      final decoded = jsonDecode(response.body);
+      final data = decoded['data'] ?? decoded;
+      return Map<String, dynamic>.from(data is Map ? data : {});
     }
   }
 }

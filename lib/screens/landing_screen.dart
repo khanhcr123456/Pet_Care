@@ -8,6 +8,7 @@ import 'package:pet_care/screens/appointments_screen.dart';
 import 'package:pet_care/screens/booking_screen.dart';
 import 'package:pet_care/screens/store_screen.dart';
 import 'package:pet_care/screens/cart_screen.dart';
+import 'package:pet_care/screens/purchase_history_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -21,10 +22,12 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen> {
   int _selectedIndex = 0;
+  Map<String, dynamic>? _currentUser;
 
   @override
   void initState() {
     super.initState();
+    _currentUser = widget.user;
   }
 
   @override
@@ -52,22 +55,39 @@ class _LandingScreenState extends State<LandingScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => StoreScreen(user: widget.user)));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => StoreScreen(user: _currentUser)));
             },
             icon: const Icon(Icons.storefront, color: Color(0xFF0F2E53)),
           ),
           IconButton(
             onPressed: () {
-              if (widget.user == null || widget.user!['token'] == null) {
+              if (_currentUser == null || _currentUser!['token'] == null) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để xem giỏ hàng!')));
                 return;
               }
-              Navigator.push(context, MaterialPageRoute(builder: (context) => CartScreen(user: widget.user!)));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => CartScreen(user: _currentUser!)));
             },
             icon: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF0F2E53)),
           ),
-          widget.user != null 
-            ? _buildUserMenu()
+          _currentUser != null 
+            ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: ClipOval(
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    color: Colors.grey[200],
+                    child: (_currentUser!['avatar'] != null && _currentUser!['avatar'].toString().trim().isNotEmpty && _currentUser!['avatar'].toString().startsWith('http'))
+                        ? Image.network(
+                            _currentUser!['avatar'],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
+                          )
+                        : Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
+                  ),
+                ),
+              )
             : TextButton(
                 onPressed: () {
                   Navigator.push(
@@ -100,20 +120,27 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildBody() {
     if (_selectedIndex == 1) {
-      return ServicesScreen(user: widget.user);
+      return ServicesScreen(user: _currentUser);
     }
     if (_selectedIndex == 2) {
-      return PetsScreen(user: widget.user);
+      return PetsScreen(user: _currentUser);
     }
     if (_selectedIndex == 3) {
-      if (widget.user != null) {
-        return AppointmentsScreen(user: widget.user!, isEmbedded: true);
+      if (_currentUser != null) {
+        return AppointmentsScreen(user: _currentUser!, isEmbedded: true);
       } else {
         return const Center(child: Text('Vui lòng đăng nhập để xem lịch khám'));
       }
     }
     if (_selectedIndex == 4) {
-      return ProfileScreen(user: widget.user);
+      return ProfileScreen(
+        user: _currentUser,
+        onUserUpdated: (updatedUser) {
+          setState(() {
+            _currentUser = updatedUser;
+          });
+        },
+      );
     }
     
     return SingleChildScrollView(
@@ -180,13 +207,13 @@ class _LandingScreenState extends State<LandingScreen> {
           const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: () {
-              if (widget.user == null) {
+              if (_currentUser == null) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để đặt lịch hẹn!')));
                 return;
               }
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => BookingScreen(user: widget.user!)),
+                MaterialPageRoute(builder: (context) => BookingScreen(user: _currentUser!)),
               );
             },
             icon: const Icon(Icons.access_time, size: 20, color: Color(0xFF0F2E53)),
@@ -234,11 +261,11 @@ class _LandingScreenState extends State<LandingScreen> {
                 child: GestureDetector(
                   onTap: () {
                     if (f['title'] == 'Cửa hàng thú cưng') {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => StoreScreen(user: widget.user)));
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => StoreScreen(user: _currentUser)));
                     } else if (f['title'] == 'Dịch vụ thú cưng') {
                       setState(() => _selectedIndex = 1);
                     } else if (f['title'] == 'Đặt lịch khám') {
-                      if (widget.user != null) {
+                      if (_currentUser != null) {
                         setState(() => _selectedIndex = 3);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để xem lịch khám')));
@@ -313,97 +340,12 @@ class _LandingScreenState extends State<LandingScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => VetsScreen(user: widget.user)),
+                  MaterialPageRoute(builder: (context) => VetsScreen(user: _currentUser)),
                 );
               },
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildUserMenu() {
-    return PopupMenuButton<String>(
-      offset: const Offset(0, 48),
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-        child: ClipOval(
-          child: Container(
-            width: 36,
-            height: 36,
-            color: Colors.grey[200],
-            child: (widget.user!['avatar'] != null && widget.user!['avatar'].toString().trim().isNotEmpty && widget.user!['avatar'].toString().startsWith('http'))
-                ? Image.network(
-                    widget.user!['avatar'],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover);
-                    },
-                  )
-                : Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
-          ),
-        ),
-      ),
-      onSelected: (value) async {
-        if (value == 'info') {
-          setState(() {
-            _selectedIndex = 3;
-          });
-        } else if (value == 'appointments') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => AppointmentsScreen(user: widget.user!)),
-          );
-        } else if (value == 'logout') {
-          final auth = AuthService();
-          if (widget.user!['token'] != null) {
-            await auth.logout(widget.user!['token']);
-          }
-          if (!mounted) return;
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const LandingScreen()),
-            (route) => false,
-          );
-        }
-      },
-      itemBuilder: (context) => [
-        _buildPopupItem('info', 'Thông tin cá nhân'),
-        const PopupMenuDivider(height: 1),
-        _buildPopupItem('medical', 'Hồ sơ bệnh án'),
-        const PopupMenuDivider(height: 1),
-        _buildPopupItem('appointments', 'Lịch khám của tôi'),
-        const PopupMenuDivider(height: 1),
-        _buildPopupItem('pets', 'Thú cưng của tôi'),
-        const PopupMenuDivider(height: 1),
-        _buildPopupItem('history', 'Lịch Sử Giao Dịch'),
-        const PopupMenuDivider(height: 1),
-        _buildPopupItem('logout', 'Đăng xuất', isLogout: true),
-      ],
-    );
-  }
-
-  PopupMenuItem<String> _buildPopupItem(String value, String text, {bool isLogout = false}) {
-    return PopupMenuItem<String>(
-      value: value,
-      child: Row(
-        children: [
-          if (isLogout) ...[
-            const Icon(Icons.logout, color: Colors.red, size: 20),
-            const SizedBox(width: 8),
-          ],
-          Text(
-            text,
-            style: TextStyle(
-              color: isLogout ? Colors.red : const Color(0xFF0F2E53),
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ],
       ),
     );
   }

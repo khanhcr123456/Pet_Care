@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pet_care/services/invoice_service.dart';
+import 'package:pet_care/screens/purchase_history_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -28,7 +30,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController.text = widget.user['name'] ?? widget.user['username'] ?? '';
+    _nameController.text = widget.user['name'] ?? widget.user['fullName'] ?? widget.user['username'] ?? '';
     _phoneController.text = widget.user['phone'] ?? '';
     _addressController.text = widget.user['address'] ?? '';
   }
@@ -63,8 +65,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     setState(() => _isProcessing = true);
 
-    // Giả lập API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final invoiceData = {
+        'receiverName': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'paymentMethod': _selectedPaymentMethod,
+        'shippingFee': _shippingFee,
+        'totalAmount': widget.totalAmount + _shippingFee,
+        'products': widget.selectedItems.map((item) {
+          final product = item['product'] ?? {};
+          return {
+            'productId': product['_id'] ?? product['id'],
+            'quantity': item['quantity'] ?? 1,
+            'price': product['price'] ?? 0,
+          };
+        }).toList(),
+      };
+
+      await InvoiceService().createProductInvoice(widget.user['token'], invoiceData);
 
     if (mounted) {
       setState(() => _isProcessing = false);
@@ -87,7 +106,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Trở về trang Landing/Store
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   style: ElevatedButton.styleFrom(
@@ -98,10 +116,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: const Text('VỀ TRANG CHỦ'),
                 ),
               ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => PurchaseHistoryScreen(user: widget.user)),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFF07E2B),
+                    side: const BorderSide(color: Color(0xFFF07E2B)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('XEM ĐƠN HÀNG'),
+                ),
+              ),
             ],
           ),
         ),
       );
+    }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: ${e.toString().replaceAll('Exception: ', '')}')));
+      }
     }
   }
 
@@ -145,8 +188,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _addressController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(labelText: 'Địa chỉ giao hàng', prefixIcon: Icon(Icons.location_on, color: Colors.grey)),
+                    minLines: 1,
+                    maxLines: null,
+                    decoration: const InputDecoration(
+                      labelText: 'Địa chỉ giao hàng',
+                      prefixIcon: Icon(Icons.location_on, color: Colors.grey),
+                      alignLabelWithHint: true,
+                    ),
                   ),
                 ],
               ),
@@ -200,37 +248,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               );
             }),
-            const SizedBox(height: 12),
-
-            // Phương thức thanh toán
-            const Text('Phương thức thanh toán', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
-              ),
-              child: Column(
-                children: [
-                  RadioListTile<String>(
-                    title: const Text('Thanh toán khi nhận hàng (COD)'),
-                    value: 'COD',
-                    groupValue: _selectedPaymentMethod,
-                    activeColor: const Color(0xFFF07E2B),
-                    onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
-                  ),
-                  const Divider(height: 1),
-                  RadioListTile<String>(
-                    title: const Text('Chuyển khoản ngân hàng'),
-                    value: 'BANK',
-                    groupValue: _selectedPaymentMethod,
-                    activeColor: const Color(0xFFF07E2B),
-                    onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: 24),
 
             // Tổng kết
@@ -241,31 +258,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFFF07E2B).withOpacity(0.3)),
               ),
-              child: Column(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Tạm tính:', style: TextStyle(color: Colors.grey)),
-                      Text(formatCurrency(widget.totalAmount), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Phí vận chuyển:', style: TextStyle(color: Colors.grey)),
-                      Text(formatCurrency(_shippingFee), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const Divider(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Tổng thanh toán:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
-                      Text(formatCurrency(widget.totalAmount + _shippingFee), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFF07E2B))),
-                    ],
-                  ),
+                  const Text('Tổng thanh toán:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                  Text(formatCurrency(widget.totalAmount), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFF07E2B))),
                 ],
               ),
             ),

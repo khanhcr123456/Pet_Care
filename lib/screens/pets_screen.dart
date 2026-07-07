@@ -226,11 +226,13 @@ class _PetsScreenState extends State<PetsScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Danh Sách Thú Cưng', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+          const Text('Thú Cưng Của Tôi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+          const SizedBox(height: 4),
+          Text('${_pets.length} thú cưng', style: const TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 16),
           ListView.builder(
             shrinkWrap: true,
@@ -238,58 +240,95 @@ class _PetsScreenState extends State<PetsScreen> {
             itemCount: _pets.length,
             itemBuilder: (context, index) {
               final pet = _pets[index];
-              final isDog = pet['species'] == 'Dog';
+              final species = (pet['species'] ?? '').toString().toLowerCase();
+              final isDog = species == 'dog';
+              final isCat = species == 'cat';
+              final emoji = isDog ? '🐶' : isCat ? '🐱' : '🐾';
+              final String speciesLabel = isDog ? 'Chó' : isCat ? 'Mèo' : pet['species'] ?? '';
+              const List<Color> gradientColors = [Color(0xFFFFF8F0), Color(0xFFFFEDD8)];
+              const Color accentColor = Color(0xFFF07E2B);
+
               return GestureDetector(
                 onTap: () {
                   if (widget.user != null) {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => PetDetailScreen(
-                          petId: pet['_id'],
-                          user: widget.user!,
-                        ),
-                      ),
+                      MaterialPageRoute(builder: (context) => PetDetailScreen(petId: pet['_id'], user: widget.user!)),
                     ).then((_) => _fetchPets());
                   }
                 },
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF6FAFD), // Light blue tint like in the image
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFD9E8F5)),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.white,
-                        backgroundImage: (pet['avatar'] != null && pet['avatar'].toString().startsWith('http')) 
-                            ? NetworkImage(pet['avatar']) 
-                            : null,
-                        child: (pet['avatar'] == null || !pet['avatar'].toString().startsWith('http'))
-                            ? Text(isDog ? '🐶' : '🐱', style: const TextStyle(fontSize: 30))
-                            : null,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(pet['name'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
-                            const SizedBox(height: 4),
-                            Text('${pet['age']} tuổi', style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563))),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                        onPressed: () => _deletePet(pet['_id']),
-                      ),
-                      Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+                    gradient: LinearGradient(colors: gradientColors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: accentColor.withOpacity(0.18), blurRadius: 14, offset: const Offset(0, 5)),
                     ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            border: Border.all(color: accentColor, width: 2.5),
+                            boxShadow: [BoxShadow(color: accentColor.withOpacity(0.2), blurRadius: 8)],
+                          ),
+                          child: ClipOval(
+                            child: (pet['avatar'] != null && pet['avatar'].toString().startsWith('http'))
+                                ? Image.network(pet['avatar'], fit: BoxFit.cover)
+                                : Center(child: Text(emoji, style: const TextStyle(fontSize: 36))),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    pet['name'] ?? '',
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: accentColor.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(speciesLabel, style: TextStyle(color: accentColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  _petTag(Icons.cake_outlined, '${pet['age']} tuổi', accentColor),
+                                  if (pet['breed'] != null && pet['breed'].toString().isNotEmpty) ...[
+                                    const SizedBox(width: 8),
+                                    _petTag(Icons.pets, pet['breed'], accentColor),
+                                  ],
+                                ],
+                              ),
+                              if (pet['weight'] != null) ...[
+                                const SizedBox(height: 4),
+                                _petTag(Icons.monitor_weight_outlined, '${pet['weight']} kg', accentColor),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios, color: accentColor, size: 16),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -297,6 +336,17 @@ class _PetsScreenState extends State<PetsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _petTag(IconData icon, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 3),
+        Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500)),
+      ],
     );
   }
 

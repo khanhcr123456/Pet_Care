@@ -20,6 +20,19 @@ class ProductService {
     }
   }
 
+  Future<Map<String, dynamic>?> getProductById(String productId) async {
+    try {
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/products/$productId'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['data'] ?? data;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return null;
+  }
+
   Future<void> addToCart(String token, String productId, int quantity) async {
     final url = '${AppConfig.baseUrl}/products/$productId/cart';
     final response = await http.post(

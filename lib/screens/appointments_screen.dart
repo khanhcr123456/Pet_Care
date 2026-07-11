@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pet_care/services/booking_service.dart';
 import 'package:pet_care/screens/booking_screen.dart';
+import 'package:pet_care/screens/pet_detail_screen.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -75,17 +76,20 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     final vetName = (appt['vet'] is Map) ? (appt['vet']['fullName'] ?? appt['vet']['name'] ?? 'Bác sĩ') : 'Bác sĩ';
                     final petName = (appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : 'Thú cưng';
                     final serviceName = (appt['service'] is Map) ? (appt['service']['name'] ?? 'Dịch vụ') : 'Dịch vụ';
-                    final status = (appt['status']?.toString().toLowerCase() ?? 'pending');
+                    final status = (appt['status']?.toString().toLowerCase() ?? 'chờ_xác_nhận').replaceAll(' ', '_');
                     
                     Color statusColor = Colors.orange;
                     String statusText = 'Chờ xác nhận';
-                    if (status == 'confirmed') {
+                    if (status == 'đã_xác_nhận' || status == 'confirmed') {
                       statusColor = Colors.blue;
                       statusText = 'Đã xác nhận';
-                    } else if (status == 'completed') {
+                    } else if (status == 'đang_khám') {
+                      statusColor = Colors.purple;
+                      statusText = 'Đang khám';
+                    } else if (status == 'hoàn_thành' || status == 'completed') {
                       statusColor = Colors.green;
                       statusText = 'Hoàn thành';
-                    } else if (status == 'cancelled') {
+                    } else if (status == 'đã_hủy' || status == 'cancelled') {
                       statusColor = Colors.red;
                       statusText = 'Đã hủy';
                     }
@@ -146,7 +150,24 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                 Expanded(child: Text('Thú cưng: $petName')),
                               ],
                             ),
-                            if (status != 'completed' && status != 'cancelled') ...[
+                            if (status == 'hoàn_thành' || status == 'completed') ...[
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: () => _viewResult(appt),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF0F4C81),
+                                    side: const BorderSide(color: Color(0xFF0F4C81)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: Text(
+                                    serviceName.toLowerCase().contains('tiêm') ? 'Xem thông tin bản tiêm' : 'Xem kết quả',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                            ] else if (status != 'hoàn_thành' && status != 'completed' && status != 'đã_hủy' && status != 'cancelled') ...[
                               const SizedBox(height: 16),
                               SizedBox(
                                 width: double.infinity,
@@ -241,6 +262,191 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       ),
       body: content,
       floatingActionButton: fab,
+    );
+  }
+
+  void _viewResult(dynamic appt) async {
+    final petId = (appt['pet'] is Map) ? (appt['pet']['_id'] ?? appt['pet']['id']) : appt['pet'];
+    final apptId = appt['_id'] ?? appt['id'];
+    if (petId == null || apptId == null) return;
+
+    final isVaccine = appt['service'] != null && appt['service'] is Map 
+        ? (appt['service']['name'] ?? '').toString().toLowerCase().contains('tiêm') 
+        : false;
+
+    showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+    
+    try {
+      if (isVaccine) {
+        final vaccines = await BookingService().getVaccinationsByPetId(widget.user['token'], petId.toString());
+        var targetVax;
+        for (var v in vaccines) {
+          final aId = v['appointment'] is Map ? (v['appointment']['_id'] ?? v['appointment']['id']) : v['appointment'];
+          if (aId == apptId) { targetVax = v; break; }
+        }
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+        
+        if (targetVax != null) {
+          _showVaccinationDialog(targetVax);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy bản tiêm nào.')));
+        }
+      } else {
+        final records = await BookingService().getHealthRecordsByPetId(widget.user['token'], petId.toString());
+        var targetHr;
+        for (var r in records) {
+          final aId = r['appointment'] is Map ? (r['appointment']['_id'] ?? r['appointment']['id']) : r['appointment'];
+          if (aId == apptId) { targetHr = r; break; }
+        }
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+        
+        if (targetHr != null) {
+          _showHealthRecordDialog(targetHr);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy kết quả khám nào.')));
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  void _showVaccinationDialog(dynamic vaxData) {
+    final vaxName = vaxData['vaccineName'] ?? vaxData['name'] ?? 'Không xác định';
+    final disease = vaxData['disease'] ?? 'Không có thông tin';
+    final status = vaxData['status'] ?? 'Đã tiêm';
+    String dateAdmin = '';
+    if (vaxData['dateAdministered'] != null) {
+      final p = vaxData['dateAdministered'].toString().split('T')[0].split('-');
+      if (p.length >= 3) dateAdmin = '${p[2]}/${p[1]}/${p[0]}';
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Thông tin tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow('Tên vaccine:', vaxName),
+            _buildDetailRow('Ngày tiêm:', dateAdmin.isNotEmpty ? dateAdmin : '--/--/----'),
+            _buildDetailRow('Trạng thái:', status),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Đóng', style: TextStyle(color: Color(0xFF0F4C81))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHealthRecordDialog(dynamic hrData) {
+    final generalAssessment = hrData['generalAssessment'] ?? hrData['diagnosis'] ?? 'Không có thông tin';
+    final consultation = hrData['consultation'] ?? hrData['notes'] ?? 'Không có';
+    final weight = hrData['weight']?.toString() ?? '--';
+    final temperature = hrData['temperature']?.toString() ?? '--';
+    
+    String dateAdmin = '';
+    if (hrData['examinationDate'] != null) {
+      final p = hrData['examinationDate'].toString().split('T')[0].split('-');
+      if (p.length >= 3) dateAdmin = '${p[2]}/${p[1]}/${p[0]}';
+    } else if (hrData['date'] != null) {
+      final p = hrData['date'].toString().split('T')[0].split('-');
+      if (p.length >= 3) dateAdmin = '${p[2]}/${p[1]}/${p[0]}';
+    }
+
+    final List<String> imageUrls = [];
+    final rawImages = hrData['images'];
+    if (rawImages is List) {
+      for (var img in rawImages) {
+        if (img is String && img.isNotEmpty) {
+          imageUrls.add(img);
+        } else if (img is Map) {
+          final url = img['url']?.toString() ?? img['path']?.toString() ?? '';
+          if (url.isNotEmpty) imageUrls.add(url);
+        }
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kết quả khám bệnh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Ngày khám:', dateAdmin.isNotEmpty ? dateAdmin : '--/--/----'),
+              _buildDetailRow('Đánh giá chung:', generalAssessment),
+              _buildDetailRow('Tư vấn:', consultation),
+              _buildDetailRow('Cân nặng:', '$weight kg'),
+              _buildDetailRow('Nhiệt độ:', '$temperature °C'),
+              if (imageUrls.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Hình ảnh', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: imageUrls.map((url) => GestureDetector(
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (c) => Dialog(
+                        child: InteractiveViewer(
+                          child: Image.network(url, fit: BoxFit.contain),
+                        ),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        url,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 80,
+                          height: 80,
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.broken_image, color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                  )).toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Đóng', style: TextStyle(color: Color(0xFF0F4C81))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey))),
+          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+        ],
+      ),
     );
   }
 }

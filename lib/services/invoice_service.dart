@@ -34,6 +34,21 @@ class InvoiceService {
     }
   }
 
+  Future<void> updateInvoiceStatus(String token, String invoiceId, String status) async {
+    final response = await http.patch(
+      Uri.parse('${AppConfig.baseUrl}/invoices/$invoiceId/status'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: json.encode({'status': status}),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to update invoice status: ${response.body}');
+    }
+  }
+
   Future<void> cancelInvoice(String token, String invoiceId) async {
     final response = await http.delete(
       Uri.parse('${AppConfig.baseUrl}/invoices/$invoiceId'),

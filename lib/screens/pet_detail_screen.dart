@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:pet_care/config/app_config.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/services/booking_service.dart';
+import 'package:pet_care/services/auth_service.dart';
 import 'package:pet_care/screens/booking_screen.dart';
 
 class PetDetailScreen extends StatefulWidget {
@@ -21,6 +24,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   bool _isEditing = false;
   bool _isUpdating = false;
   List<dynamic> _upcomingAppointments = [];
+  List<dynamic> _medicalHistory = [];
+  List<dynamic> _vaccineHistory = [];
+  Map<String, String> _vetNames = {};
+  Map<String, String> _apptTimes = {};
+  Map<String, String> _apptVetNames = {};
+  Map<String, String> _apptToVaccine = {};
+  Map<String, String> _apptToHealthRecord = {};
   bool _isLoadingAppointments = true;
 
   final TextEditingController _petNameController = TextEditingController();
@@ -47,18 +57,163 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   Future<void> _fetchAppointments() async {
     try {
-      final data = await BookingService().getAppointments(widget.user['token'], limit: 100);
+      final results = await Future.wait([
+        BookingService().getAllAppointments(widget.user['token'], limit: 100, petId: widget.petId),
+        BookingService().getVaccinationsByPetId(widget.user['token'], widget.petId),
+        BookingService().getHealthRecordsByPetId(widget.user['token'], widget.petId),
+      ]);
+      final data = results[0];
+      final vaccines = results[1];
+      final healthRecords = results[2];
+      
       final petId = widget.petId;
-      final upcoming = data.where((appt) {
+      final upcoming = <dynamic>[];
+      final medicalHistory = <dynamic>[];
+      final vaccineHistory = vaccines;
+      final Map<String, String> vetNames = {};
+      final Map<String, String> apptTimes = {};
+      final Map<String, String> apptVetNames = {};
+      final Map<String, String> apptToVaccine = {};
+      final Map<String, String> apptToHealthRecord = {};
+      
+      try {
+        final vetsList = await AuthService().getVets(limit: 100);
+        for (var vet in vetsList) {
+          final vId = vet['_id']?.toString() ?? vet['id']?.toString();
+          final vName = vet['fullName']?.toString() ?? vet['name']?.toString();
+          if (vId != null && vName != null) {
+            vetNames[vId] = vName;
+          }
+        }
+      } catch (e) {
+        print('Error fetching vets: $e');
+      }
+      
+      for (var appt in data) {
+        final aId = appt['_id']?.toString() ?? appt['id']?.toString();
+        if (aId != null) {
+          String startTime = '';
+          if (appt['timeSlot'] != null && appt['timeSlot'] is Map) {
+            startTime = appt['timeSlot']['startTime']?.toString() ?? '';
+          } else if (appt['startTime'] != null) {
+            startTime = appt['startTime'].toString();
+          }
+          if (startTime.isNotEmpty) {
+            apptTimes[aId] = startTime;
+          }
+        }
+
+        if (appt['vet'] is Map) {
+          final vId = appt['vet']['_id']?.toString() ?? appt['vet']['id']?.toString();
+          final vName = appt['vet']['fullName']?.toString() ?? appt['vet']['name']?.toString();
+          if (vId != null && vName != null) {
+            vetNames[vId] = vName;
+          }
+          if (aId != null && vName != null) {
+            apptVetNames[aId] = vName;
+          }
+        }
         final apptPet = appt['pet'];
         final apptPetId = apptPet is Map ? (apptPet['_id'] ?? apptPet['id']) : apptPet;
-        final status = (appt['status']?.toString().toLowerCase() ?? 'pending');
-        return apptPetId == petId && status != 'completed' && status != 'cancelled';
-      }).toList();
-      
+        if (apptPetId != petId) continue;
+        
+        final status = (appt['status']?.toString().toLowerCase() ?? 'pending').replaceAll(' ', '_');
+        
+        if (status == 'hoàn_thành' || status == 'completed') {
+          medicalHistory.add(appt);
+        } else if (status != 'đã_hủy' && status != 'cancelled') {
+          upcoming.add(appt);
+        }
+      }
+
+      for (var vax in vaccines) {
+        final vId = vax['_id']?.toString() ?? vax['id']?.toString();
+        final aId = vax['appointment'] is Map ? (vax['appointment']['_id'] ?? vax['appointment']['id'])?.toString() : vax['appointment']?.toString();
+        if (vId != null && aId != null) {
+          apptToVaccine[aId] = vId;
+        }
+      }
+
+      for (var hr in healthRecords) {
+        final hrId = hr['_id']?.toString() ?? hr['id']?.toString();
+        final aId = hr['appointment'] is Map ? (hr['appointment']['_id'] ?? hr['appointment']['id'])?.toString() : hr['appointment']?.toString();
+        if (hrId != null && aId != null) {
+          apptToHealthRecord[aId] = hrId;
+        }
+      }
+
+      int compareApps(dynamic a, dynamic b, {bool newestFirst = true}) {
+        DateTime aDate = DateTime.tryParse(a['date']?.toString() ?? '') ?? DateTime.now();
+        DateTime bDate = DateTime.tryParse(b['date']?.toString() ?? '') ?? DateTime.now();
+        
+        String aTime = '';
+        if (a['timeSlot'] != null && a['timeSlot'] is Map) {
+          aTime = a['timeSlot']['startTime']?.toString() ?? '';
+        } else {
+          aTime = a['startTime']?.toString() ?? '';
+        }
+        
+        String bTime = '';
+        if (b['timeSlot'] != null && b['timeSlot'] is Map) {
+          bTime = b['timeSlot']['startTime']?.toString() ?? '';
+        } else {
+          bTime = b['startTime']?.toString() ?? '';
+        }
+
+        if (aTime.isNotEmpty && aTime.contains(':')) {
+          final parts = aTime.split(':');
+          if (parts.length >= 2) {
+            int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            if (aTime.toLowerCase().contains('pm') && h < 12) h += 12;
+            if (aTime.toLowerCase().contains('am') && h == 12) h = 0;
+            aDate = DateTime(aDate.year, aDate.month, aDate.day, h, m);
+          }
+        }
+        if (bTime.isNotEmpty && bTime.contains(':')) {
+          final parts = bTime.split(':');
+          if (parts.length >= 2) {
+            int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            if (bTime.toLowerCase().contains('pm') && h < 12) h += 12;
+            if (bTime.toLowerCase().contains('am') && h == 12) h = 0;
+            bDate = DateTime(bDate.year, bDate.month, bDate.day, h, m);
+          }
+        }
+        return newestFirst ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
+      }
+
+      upcoming.sort((a, b) => compareApps(a, b, newestFirst: false));
+      medicalHistory.sort((a, b) => compareApps(a, b, newestFirst: true));
+
+      vaccineHistory.sort((a, b) {
+        DateTime aDate = DateTime.now();
+        if (a['dateAdministered'] != null) {
+          aDate = DateTime.tryParse(a['dateAdministered'].toString()) ?? aDate;
+        } else if (a['date'] != null) {
+          aDate = DateTime.tryParse(a['date'].toString()) ?? aDate;
+        }
+
+        DateTime bDate = DateTime.now();
+        if (b['dateAdministered'] != null) {
+          bDate = DateTime.tryParse(b['dateAdministered'].toString()) ?? bDate;
+        } else if (b['date'] != null) {
+          bDate = DateTime.tryParse(b['date'].toString()) ?? bDate;
+        }
+        
+        return bDate.compareTo(aDate); // newest first
+      });
+
       if (mounted) {
         setState(() {
           _upcomingAppointments = upcoming;
+          _medicalHistory = medicalHistory;
+          _vaccineHistory = vaccineHistory;
+          _vetNames = vetNames;
+          _apptTimes = apptTimes;
+          _apptVetNames = apptVetNames;
+          _apptToVaccine = apptToVaccine;
+          _apptToHealthRecord = apptToHealthRecord;
           _isLoadingAppointments = false;
         });
       }
@@ -190,6 +345,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isVet = widget.user['role']?.toString().toLowerCase() == 'vet';
     return Scaffold(
       backgroundColor: const Color(0xFFF6FAFD),
       appBar: AppBar(
@@ -198,12 +354,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         foregroundColor: const Color(0xFFF07E2B),
         elevation: 0,
         actions: [
-          if (!_isLoading && _pet != null && !_isEditing)
+          if (!_isLoading && _pet != null && !_isEditing && !isVet)
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
               onPressed: _deletePet,
             ),
-          if (!_isLoading && _pet != null)
+          if (!_isLoading && _pet != null && !isVet)
             IconButton(
               icon: Icon(_isEditing ? Icons.close : Icons.edit_outlined),
               onPressed: () {
@@ -522,6 +678,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   Widget _buildUpcomingAppointmentsSection() {
+    final bool isVet = widget.user['role']?.toString().toLowerCase() == 'vet';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -542,7 +699,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     Text('Lịch hẹn sắp tới', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
                   ],
                 ),
-                ElevatedButton(
+                if (!isVet)
+                  ElevatedButton(
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -603,13 +761,22 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
               final vetName = (appt['vet'] is Map) ? (appt['vet']['fullName'] ?? appt['vet']['name'] ?? 'Bác sĩ') : 'Bác sĩ';
               final serviceName = (appt['service'] is Map) ? (appt['service']['name'] ?? 'Dịch vụ') : 'Dịch vụ';
-              final status = (appt['status']?.toString().toLowerCase() ?? 'pending');
-              
+              final isVaccine = serviceName.toString().toLowerCase().contains('tiêm') || serviceName.toString().toLowerCase().contains('vaccine');
+              final status = (appt['status']?.toString().toLowerCase() ?? 'chờ_xác_nhận').replaceAll(' ', '_');
               Color statusColor = Colors.orange;
               String statusText = 'Chờ xác nhận';
-              if (status == 'confirmed') {
+              if (status == 'đã_xác_nhận' || status == 'confirmed') {
                 statusColor = Colors.blue;
                 statusText = 'Đã xác nhận';
+              } else if (status == 'đang_khám' || status == 'in_progress') {
+                statusColor = Colors.purple;
+                statusText = isVaccine ? 'Đang tiêm' : 'Đang khám';
+              } else if (status == 'hoàn_thành' || status == 'completed') {
+                statusColor = Colors.green;
+                statusText = 'Hoàn thành';
+              } else if (status == 'đã_hủy' || status == 'cancelled') {
+                statusColor = Colors.red;
+                statusText = 'Đã hủy';
               }
 
               return Padding(
@@ -620,30 +787,31 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     border: Border.all(color: Colors.grey.shade200),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Column(
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(startTime.isNotEmpty ? startTime : '--:--', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                          const SizedBox(height: 4),
-                          Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(serviceName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-                            const SizedBox(height: 4),
-                            Text('BS. $vetName', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(startTime.isNotEmpty ? startTime : '--:--', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                              const SizedBox(height: 4),
+                              Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            ],
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(serviceName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                                const SizedBox(height: 4),
+                                Text('BS. $vetName', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
@@ -652,51 +820,101 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                             ),
                             child: Text(statusText, style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.bold)),
                           ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            height: 26,
-                            child: OutlinedButton(
-                              onPressed: () async {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('Xác nhận hủy'),
-                                    content: const Text('Bạn có chắc chắn muốn hủy lịch khám này không?'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Không')),
-                                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Có, hủy', style: TextStyle(color: Colors.red))),
-                                    ],
-                                  ),
-                                );
-                                if (confirm == true) {
-                                  if (!mounted) return;
-                                  try {
-                                    showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
-                                    final apptId = appt['_id'] ?? appt['id'];
-                                    await BookingService().cancelAppointment(widget.user['token'], apptId);
-                                    if (!mounted) return;
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hủy lịch thành công')));
-                                    setState(() => _isLoadingAppointments = true);
-                                    _fetchAppointments();
-                                  } catch (e) {
-                                    if (!mounted) return;
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
-                                  }
-                                }
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                side: const BorderSide(color: Colors.red),
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              ),
-                              child: const Text('Hủy', style: TextStyle(fontSize: 11)),
-                            ),
-                          ),
                         ],
                       ),
+                      if (isVet && status != 'hoàn_thành' && status != 'completed' && status != 'đã_hủy' && status != 'cancelled') ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 36,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              String newStatus = '';
+                              if (status == 'chờ_xác_nhận' || status == 'pending') newStatus = 'đã_xác_nhận';
+                              else if (status == 'đã_xác_nhận' || status == 'confirmed') newStatus = 'đang_khám';
+                              else if (status == 'đang_khám' || status == 'in_progress') {
+                                if (isVaccine) {
+                                  _showVaccinationForm(appt);
+                                } else {
+                                  _showMedicalForm(appt);
+                                }
+                                return;
+                              }
+                              
+                              if (newStatus.isEmpty) return;
+                              
+                              try {
+                                final apptId = appt['_id'] ?? appt['id'];
+                                await BookingService().updateAppointmentStatus(widget.user['token'], apptId, newStatus);
+                                if (!mounted) return;
+                                // Update state locally — no need for full reload
+                                setState(() {
+                                  appt['status'] = newStatus;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật trạng thái thành công')));
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF07E2B),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              (status == 'chờ_xác_nhận' || status == 'pending') ? 'Xác nhận lịch hẹn' : ((status == 'đã_xác_nhận' || status == 'confirmed') ? (isVaccine ? 'Bắt đầu tiêm phòng' : 'Bắt đầu khám bệnh') : 'Nhập kết quả'),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (!isVet && status != 'hoàn_thành' && status != 'completed' && status != 'đã_hủy' && status != 'cancelled' && status != 'đang_khám' && status != 'in_progress') ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 36,
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Xác nhận hủy'),
+                                  content: const Text('Bạn có chắc chắn muốn hủy lịch khám này không?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Không')),
+                                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Có, hủy', style: TextStyle(color: Colors.red))),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                if (!mounted) return;
+                                try {
+                                  showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+                                  final apptId = appt['_id'] ?? appt['id'];
+                                  await BookingService().cancelAppointment(widget.user['token'], apptId);
+                                  if (!mounted) return;
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hủy lịch thành công')));
+                                  setState(() => _isLoadingAppointments = true);
+                                  _fetchAppointments();
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+                                }
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('Hủy lịch hẹn', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -723,7 +941,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               children: const [
                 Icon(Icons.favorite_border, color: Color(0xFF0F4C81), size: 20),
                 SizedBox(width: 8),
-                Text('Lịch sử khám bệnh', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                Text('Lịch sử lịch hẹn', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
               ],
             ),
           ),
@@ -769,12 +987,17 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             ),
           ),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24.0),
-            child: Center(
-              child: Text('Không tìm thấy lịch sử nào khớp với điều kiện lọc', style: TextStyle(color: Colors.grey, fontSize: 13)),
-            ),
-          ),
+          if (_medicalHistory.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0),
+              child: Center(
+                child: Text('Không tìm thấy lịch sử nào', style: TextStyle(color: Colors.grey, fontSize: 13)),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 16),
+            ..._medicalHistory.map((appt) => _buildHistoryItem(appt)).toList(),
+          ],
         ],
       ),
     );
@@ -801,13 +1024,673 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             ),
           ),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24.0),
-            child: Center(
-              child: Text('Chưa có lịch sử tiêm vaccine', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          if (_vaccineHistory.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0),
+              child: Center(
+                child: Text('Chưa có lịch sử tiêm vaccine', style: TextStyle(color: Colors.grey, fontSize: 13)),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 16),
+            ..._vaccineHistory.map((vax) => _buildVaccineHistoryItem(vax)).toList(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVaccineHistoryItem(dynamic vax) {
+    String formattedDate = '';
+    String time = '--:--';
+    
+    if (vax['date'] != null) {
+      final isoStr = vax['date'].toString();
+      final parts = isoStr.split('T');
+      if (parts.length == 2) {
+        final dateParts = parts[0].split('-');
+        if (dateParts.length >= 3) {
+          formattedDate = '${dateParts[2]}/${dateParts[1]}/${dateParts[0]}';
+        }
+      }
+    } else if (vax['dateAdministered'] != null) {
+      final isoStr = vax['dateAdministered'].toString();
+      final parts = isoStr.split('T');
+      if (parts.length == 2) {
+        final dateParts = parts[0].split('-');
+        if (dateParts.length >= 3) {
+          formattedDate = '${dateParts[2]}/${dateParts[1]}/${dateParts[0]}';
+        }
+      }
+    }
+
+    final apptId = vax['appointment'] is Map ? (vax['appointment']['_id'] ?? vax['appointment']['id'])?.toString() : vax['appointment']?.toString();
+    if (apptId != null && _apptTimes.containsKey(apptId)) {
+      time = _apptTimes[apptId]!;
+    } else if (vax['dateAdministered'] != null) {
+      final isoStr = vax['dateAdministered'].toString();
+      final parts = isoStr.split('T');
+      if (parts.length == 2) {
+        time = parts[1].substring(0, 5);
+      }
+    } else if (vax['date'] != null) {
+      final isoStr = vax['date'].toString();
+      final parts = isoStr.split('T');
+      if (parts.length == 2) {
+        time = parts[1].substring(0, 5);
+      }
+    }
+
+    String vetName = 'Bác sĩ';
+    final vetId = vax['vet'] is Map ? (vax['vet']['_id'] ?? vax['vet']['id'])?.toString() : vax['vet']?.toString();
+    
+    if (apptId != null && _apptVetNames.containsKey(apptId)) {
+      vetName = 'BS. ${_apptVetNames[apptId]}';
+    } else if (vetId != null && _vetNames.containsKey(vetId)) {
+      vetName = 'BS. ${_vetNames[vetId]}';
+    } else if (vax['vet'] is Map) {
+      vetName = 'BS. ${vax['vet']['fullName'] ?? vax['vet']['name'] ?? ''}';
+    }
+    
+    final vaccineName = vax['vaccineName'] ?? vax['name'] ?? 'Thuốc tiêm';
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(time, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                const SizedBox(height: 4),
+                Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(vaccineName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                  const SizedBox(height: 4),
+                  Text(vetName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text('Đã tiêm', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryItem(dynamic appt) {
+    String formattedDate = '';
+    if (appt['date'] != null) {
+      final parts = appt['date'].toString().split('T')[0].split('-');
+      if (parts.length >= 3) {
+        formattedDate = '${parts[2]}/${parts[1]}/${parts[0]}';
+      }
+    }
+    String startTime = '';
+    if (appt['timeSlot'] != null && appt['timeSlot'] is Map) {
+      startTime = appt['timeSlot']['startTime'] ?? '';
+    } else if (appt['startTime'] != null) {
+      startTime = appt['startTime'];
+    }
+
+    final vetName = (appt['vet'] is Map) ? (appt['vet']['fullName'] ?? appt['vet']['name'] ?? 'Bác sĩ') : 'Bác sĩ';
+    final serviceName = (appt['service'] is Map) ? (appt['service']['name'] ?? 'Dịch vụ') : 'Dịch vụ';
+    final apptId = appt['_id']?.toString() ?? appt['id']?.toString();
+    final bool hasVaccine = apptId != null && _apptToVaccine.containsKey(apptId);
+    final bool hasHealthRecord = apptId != null && _apptToHealthRecord.containsKey(apptId);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(startTime.isNotEmpty ? startTime : '--:--', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                    const SizedBox(height: 4),
+                    Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(serviceName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                      const SizedBox(height: 4),
+                      Text('BS. $vetName', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('Hoàn thành', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            if (hasVaccine) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: () => _showVaccinationDetails(_apptToVaccine[apptId]!),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF0F4C81)),
+                    foregroundColor: const Color(0xFF0F4C81),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Xem thông tin bản tiêm', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ] else if (hasHealthRecord) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: () => _showHealthRecordDetails(_apptToHealthRecord[apptId]!),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF0F4C81)),
+                    foregroundColor: const Color(0xFF0F4C81),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Xem kết quả', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ]
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showHealthRecordDetails(String hrId) async {
+    showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+    try {
+      final hrData = await BookingService().getHealthRecordById(widget.user['token'], hrId);
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+      
+      final generalAssessment = hrData['generalAssessment'] ?? hrData['diagnosis'] ?? 'Không có thông tin';
+      final consultation = hrData['consultation'] ?? hrData['notes'] ?? 'Không có';
+      final weight = hrData['weight']?.toString() ?? '--';
+      final temperature = hrData['temperature']?.toString() ?? '--';
+      
+      String dateAdmin = '';
+      if (hrData['examinationDate'] != null) {
+        final p = hrData['examinationDate'].toString().split('T')[0].split('-');
+        if (p.length >= 3) dateAdmin = '${p[2]}/${p[1]}/${p[0]}';
+      } else if (hrData['date'] != null) {
+        final p = hrData['date'].toString().split('T')[0].split('-');
+        if (p.length >= 3) dateAdmin = '${p[2]}/${p[1]}/${p[0]}';
+      }
+
+      // Parse images from API response
+      final List<String> imageUrls = [];
+      final rawImages = hrData['images'];
+      if (rawImages is List) {
+        for (var img in rawImages) {
+          if (img is String && img.isNotEmpty) {
+            imageUrls.add(img);
+          } else if (img is Map) {
+            final url = img['url']?.toString() ?? img['path']?.toString() ?? '';
+            if (url.isNotEmpty) imageUrls.add(url);
+          }
+        }
+      }
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Kết quả khám bệnh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDetailRow('Ngày khám:', dateAdmin.isNotEmpty ? dateAdmin : '--/--/----'),
+                _buildDetailRow('Đánh giá chung:', generalAssessment),
+                _buildDetailRow('Tư vấn:', consultation),
+                _buildDetailRow('Cân nặng:', '$weight kg'),
+                _buildDetailRow('Nhiệt độ:', '$temperature °C'),
+                if (imageUrls.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text('Hình ảnh', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: imageUrls.map((url) => GestureDetector(
+                      onTap: () => showDialog(
+                        context: context,
+                        builder: (c) => Dialog(
+                          child: InteractiveViewer(
+                            child: Image.network(url, fit: BoxFit.contain),
+                          ),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          url,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 80,
+                            height: 80,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                    )).toList(),
+                  ),
+                ],
+              ],
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đóng', style: TextStyle(color: Color(0xFF0F4C81))),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không thể tải thông tin: $e')));
+    }
+  }
+
+  void _showVaccinationDetails(String vaxId) async {
+    showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+    try {
+      final vaxData = await BookingService().getVaccinationById(widget.user['token'], vaxId);
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+      
+      final vaxName = vaxData['vaccineName'] ?? vaxData['name'] ?? 'Không xác định';
+      final disease = vaxData['disease'] ?? 'Không có thông tin';
+      final status = vaxData['status'] ?? 'Đã tiêm';
+      String dateAdmin = '';
+      if (vaxData['dateAdministered'] != null) {
+        final p = vaxData['dateAdministered'].toString().split('T')[0].split('-');
+        if (p.length >= 3) dateAdmin = '${p[2]}/${p[1]}/${p[0]}';
+      }
+      String nextDate = '';
+      if (vaxData['nextDate'] != null) {
+        final p = vaxData['nextDate'].toString().split('T')[0].split('-');
+        if (p.length >= 3) nextDate = '${p[2]}/${p[1]}/${p[0]}';
+      }
+
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Thông tin tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Tên vaccine:', vaxName),
+              _buildDetailRow('Ngày tiêm:', dateAdmin.isNotEmpty ? dateAdmin : '--/--/----'),
+              _buildDetailRow('Trạng thái:', status),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đóng', style: TextStyle(color: Color(0xFF0F4C81))),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không thể tải thông tin: $e')));
+    }
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey))),
+          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
         ],
+      ),
+    );
+  }
+
+  void _showVaccinationForm(dynamic appt) {
+    final TextEditingController vaccineNameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nhập kết quả tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Tên thuốc tiêm / Bệnh tiêm phòng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: vaccineNameController,
+              decoration: InputDecoration(
+                hintText: 'Nhập tên vaccine...',
+                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (vaccineNameController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên vaccine')));
+                return;
+              }
+              Navigator.pop(ctx);
+              
+              try {
+                showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+                
+                final apptId = appt['_id'] ?? appt['id'];
+                final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? widget.user['id']);
+                final dateStr = (appt['date'] != null && appt['date'] != '---') ? appt['date'] : DateTime.now().toIso8601String();
+                
+                final payload = {
+                  'pet': widget.petId,
+                  'vet': apptVetId,
+                  'name': vaccineNameController.text.trim(),
+                  'vaccineName': vaccineNameController.text.trim(),
+                  'disease': vaccineNameController.text.trim(),
+                  'dateAdministered': dateStr,
+                  'date': dateStr,
+                  'nextDate': DateTime.now().add(const Duration(days: 365)).toIso8601String(),
+                  'status': 'Đã tiêm',
+                  'appointment': apptId,
+                };
+                
+                await BookingService().addVaccination(widget.user['token'], payload);
+                await BookingService().updateAppointmentStatus(widget.user['token'], apptId, 'hoàn_thành');
+                
+                if (!mounted) return;
+                Navigator.pop(context); // Close loading
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu kết quả tiêm phòng')));
+                
+                setState(() => _isLoadingAppointments = true);
+                _fetchAppointments();
+              } catch (e) {
+                if (!mounted) return;
+                Navigator.pop(context); // Close loading
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF07E2B),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Lưu kết quả'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMedicalForm(dynamic appt) {
+    final TextEditingController generalAssessmentController = TextEditingController();
+    final TextEditingController consultationController = TextEditingController();
+    final TextEditingController weightController = TextEditingController();
+    final TextEditingController tempController = TextEditingController();
+    List<String> selectedImagePaths = [];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setLocalState) {
+          return AlertDialog(
+            title: const Text('Nh\u1eadp k\u1ebft qu\u1ea3 kh\u00e1m b\u1ec7nh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('\u0110\u00e1nh gi\u00e1 chung', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: generalAssessmentController,
+                    decoration: InputDecoration(
+                      hintText: 'Nh\u1eadp \u0111\u00e1nh gi\u00e1 chung...',
+                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('T\u01b0 v\u1ea5n', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: consultationController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Nh\u1eadp t\u01b0 v\u1ea5n / ghi ch\u00fa...',
+                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('C\u00e2n n\u1eb7ng (kg)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: weightController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                hintText: 'VD: 5.2',
+                                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Nhi\u1ec7t \u0111\u1ed9 (\u00b0C)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: tempController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                hintText: 'VD: 38.5',
+                                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('H\u00ecnh \u1ea3nh (k\u1ebft qu\u1ea3 X-quang, si\u00eau \u00e2m,...)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...selectedImagePaths.map((path) => Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(File(path), width: 60, height: 60, fit: BoxFit.cover),
+                              ),
+                              Positioned(
+                                top: -8,
+                                right: -8,
+                                child: IconButton(
+                                  icon: const Icon(Icons.cancel, color: Colors.red, size: 20),
+                                  onPressed: () => setLocalState(() => selectedImagePaths.remove(path)),
+                                ),
+                              ),
+                            ],
+                          )),
+                      InkWell(
+                        onTap: () async {
+                          final picker = ImagePicker();
+                          final pickedFiles = await picker.pickMultiImage();
+                          if (pickedFiles.isNotEmpty) {
+                            setLocalState(() => selectedImagePaths.addAll(pickedFiles.map((e) => e.path)));
+                          }
+                        },
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade400),
+                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.grey.shade50,
+                          ),
+                          child: const Icon(Icons.add_photo_alternate, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('H\u1ee7y', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (generalAssessmentController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui l\u00f2ng nh\u1eadp \u0111\u00e1nh gi\u00e1 chung')));
+                    return;
+                  }
+                  Navigator.pop(ctx); // \u0110\u00f3ng form ngay l\u1eadp t\u1ee9c
+
+                  final apptId = appt['_id'] ?? appt['id'];
+                  final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? widget.user['id']);
+                  final apptServiceId = (appt['service'] is Map) ? (appt['service']['_id'] ?? appt['service']['id']) : appt['service'];
+                  final payload = {
+                    'pet': widget.petId,
+                    'vet': apptVetId,
+                    'service': apptServiceId,
+                    'appointment': apptId,
+                    'generalAssessment': generalAssessmentController.text.trim(),
+                    'consultation': consultationController.text.trim(),
+                    'weight': weightController.text.trim().isEmpty ? null : double.tryParse(weightController.text.trim()),
+                    'temperature': tempController.text.trim().isEmpty ? null : double.tryParse(tempController.text.trim()),
+                    'examinationDate': DateTime.now().toIso8601String(),
+                  };
+                  final snappedPaths = List<String>.from(selectedImagePaths);
+
+                  // Xoa khoi upcoming bang ID, tranh loi tham chieu
+                  final apptIdStr = apptId?.toString();
+                  setState(() {
+                    _upcomingAppointments.removeWhere((a) => (a['_id'] ?? a['id'])?.toString() == apptIdStr);
+                  });
+
+                  // Goi API o background - fix status string
+                  Future.wait([
+                    BookingService().addHealthRecord(widget.user['token'], payload, imagePaths: snappedPaths),
+                    BookingService().updateAppointmentStatus(widget.user['token'], apptId, 'ho\u00e0n_th\u00e0nh'),
+                  ]).then((results) {
+                    if (!mounted) return;
+                    final newHrId = results[0] as String?;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('\u2713 \u0110\u00e3 l\u01b0u k\u1ebft qu\u1ea3 kh\u00e1m b\u1ec7nh')),
+                    );
+                    // Reload danh sach de dong bo
+                    setState(() => _isLoadingAppointments = true);
+                    _fetchAppointments().then((_) {
+                      if (!mounted) return;
+                      // Hien ket qua ngay sau khi reload
+                      final hrId = newHrId ?? _apptToHealthRecord[apptIdStr];
+                      if (hrId != null) _showHealthRecordDetails(hrId);
+                    });
+                  }).catchError((e) {
+                    // Revert: hien lai trong upcoming
+                    if (!mounted) return;
+                    setState(() => _isLoadingAppointments = true);
+                    _fetchAppointments();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('L\u1ed7i: ')));
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF07E2B),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('L\u01b0u k\u1ebft qu\u1ea3'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

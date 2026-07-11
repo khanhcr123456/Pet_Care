@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:pet_care/screens/landing_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:pet_care/screens/register_screen.dart';
+import 'package:pet_care/screens/vet_dashboard_screen.dart';
+import 'package:pet_care/screens/admin_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -46,10 +48,22 @@ class _LoginScreenState extends State<LoginScreen> {
       userInfo['token'] = session.token; // Save token for logout
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => LandingScreen(user: userInfo)),
-        (route) => false,
-      );
+      if (userInfo['role'] == 'admin') {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => AdminDashboardScreen(user: userInfo)),
+          (route) => false,
+        );
+      } else if (userInfo['role'] == 'vet') {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => VetDashboardScreen(user: userInfo)),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => LandingScreen(user: userInfo)),
+          (route) => false,
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _errorMessage = error.toString());

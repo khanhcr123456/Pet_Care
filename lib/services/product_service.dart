@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:pet_care/config/app_config.dart';
 
 class ProductService {
@@ -17,6 +19,115 @@ class ProductService {
       return data['data'] ?? [];
     } else {
       throw Exception('Failed to load products');
+    }
+  }
+
+  Future<Map<String, dynamic>> addProduct(String token, Map<String, dynamic> data, {File? imageFile}) async {
+    if (imageFile != null) {
+      final request = http.MultipartRequest('POST', Uri.parse('${AppConfig.baseUrl}/products'));
+      request.headers['Authorization'] = 'Bearer $token';
+      
+      data.forEach((key, value) {
+        if (value != null) {
+          if (value is Map || value is List) {
+             request.fields[key] = json.encode(value);
+          } else {
+             request.fields[key] = value.toString();
+          }
+        }
+      });
+      
+      final ext = imageFile.path.split('.').last.toLowerCase();
+      final mimeType = (ext == 'png') ? 'png' : ((ext == 'gif') ? 'gif' : ((ext == 'webp') ? 'webp' : 'jpeg'));
+      
+      request.files.add(await http.MultipartFile.fromPath(
+        'images', 
+        imageFile.path,
+        contentType: MediaType('image', mimeType)
+      ));
+      
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to add product with image: ${response.body}');
+      }
+      final responseData = json.decode(response.body);
+      return responseData['data'] ?? {};
+    } else {
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/products'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(data),
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to add product: ${response.body}');
+      }
+      final responseData = json.decode(response.body);
+      return responseData['data'] ?? {};
+    }
+  }
+
+  Future<void> updateProduct(String token, String id, Map<String, dynamic> data, {File? imageFile}) async {
+    if (imageFile != null) {
+      final request = http.MultipartRequest('PUT', Uri.parse('${AppConfig.baseUrl}/products/$id'));
+      request.headers['Authorization'] = 'Bearer $token';
+      
+      data.forEach((key, value) {
+        if (value != null) {
+          if (value is Map || value is List) {
+             request.fields[key] = json.encode(value);
+          } else {
+             request.fields[key] = value.toString();
+          }
+        }
+      });
+      
+      final ext = imageFile.path.split('.').last.toLowerCase();
+      final mimeType = (ext == 'png') ? 'png' : ((ext == 'gif') ? 'gif' : ((ext == 'webp') ? 'webp' : 'jpeg'));
+      
+      request.files.add(await http.MultipartFile.fromPath(
+        'images', 
+        imageFile.path,
+        contentType: MediaType('image', mimeType)
+      ));
+      
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to update product with image: ${response.body}');
+      }
+    } else {
+      final response = await http.put(
+        Uri.parse('${AppConfig.baseUrl}/products/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(data),
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to update product: ${response.body}');
+      }
+    }
+  }
+
+  Future<void> deleteProduct(String token, String id) async {
+    final response = await http.delete(
+      Uri.parse('${AppConfig.baseUrl}/products/$id'),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Failed to delete product: ${response.body}');
     }
   }
 

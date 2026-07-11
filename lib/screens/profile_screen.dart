@@ -192,11 +192,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Stack(
       children: [
         SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
                 // Avatar Section
                 Center(
                   child: GestureDetector(
@@ -302,25 +303,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
 
-                const SizedBox(height: 10),
-
-                // Purchase History Button
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PurchaseHistoryScreen(user: _user!))),
-                    icon: const Icon(Icons.receipt_long, size: 18),
-                    label: const Text('Lịch Sử Đơn Hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFF07E2B),
-                      side: const BorderSide(color: Color(0xFFF07E2B)),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                if (_user!['role']?.toString().toLowerCase() != 'admin' && _user!['role']?.toString().toLowerCase() != 'vet' && _user!['role']?.toString().toLowerCase() != 'doctor') ...[
+                  const SizedBox(height: 10),
+                  // Purchase History Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PurchaseHistoryScreen(user: _user!))),
+                      icon: const Icon(Icons.receipt_long, size: 18),
+                      label: const Text('Lịch Sử Đơn Hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFF07E2B),
+                        side: const BorderSide(color: Color(0xFFF07E2B)),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 10),
+                  const SizedBox(height: 10),
+                ],
 
                 // Logout Button
                 SizedBox(
@@ -345,6 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
+        ),
 
         if (_isLoading)
           Container(
@@ -363,6 +365,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final avatarUrl = _user!['avatar'];
     if (avatarUrl != null && avatarUrl.toString().trim().isNotEmpty && avatarUrl.toString().startsWith('http')) {
       return NetworkImage(avatarUrl);
+    }
+    final role = _user!['role']?.toString().toLowerCase();
+    if (role == 'admin' || role == 'vet' || role == 'doctor') {
+      return const AssetImage('assets/images/default_vet.png');
     }
     return const AssetImage('assets/images/hero_pets.png');
   }

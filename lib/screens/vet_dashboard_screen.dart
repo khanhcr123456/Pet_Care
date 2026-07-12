@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:pet_care/utils/responsive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pet_care/screens/profile_screen.dart';
 import 'package:pet_care/services/booking_service.dart';
@@ -7,6 +8,7 @@ import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/screens/pet_detail_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 
 
 class VetDashboardScreen extends StatefulWidget {
@@ -22,6 +24,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
   int _selectedIndex = 0;
   Map<String, dynamic>? _currentUser;
   List<dynamic> _appointments = [];
+  Map<String, String> _servicesMap = {};
   bool _isLoading = true;
   List<dynamic> _allPets = [];
   bool _isLoadingPets = true;
@@ -78,10 +81,24 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
     try {
       final vetId = _currentUser!['_id'] ?? _currentUser!['id'] ?? _currentUser!['user']?['_id'] ?? _currentUser!['user']?['id'];
       print('DEBUG VET ID: $vetId');
-      final List<dynamic> apps = await BookingService().getVetAppointments(_currentUser!['token']);
+      
+      final results = await Future.wait([
+        BookingService().getVetAppointments(_currentUser!['token']),
+        PetService().getServices(limit: 100),
+      ]);
+      
+      final apps = results[0] as List<dynamic>;
+      final services = results[1] as List<dynamic>;
+      final cache = <String, String>{};
+      for (var s in services) {
+        if (s['_id'] != null) cache[s['_id'].toString()] = s['name']?.toString() ?? 'Dịch vụ';
+        if (s['id'] != null) cache[s['id'].toString()] = s['name']?.toString() ?? 'Dịch vụ';
+      }
+
       if (mounted) {
         setState(() {
           _appointments = apps;
+          _servicesMap = cache;
           _isLoading = false;
         });
       }
@@ -109,14 +126,14 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.medical_services, color: Color(0xFFF07E2B), size: 28),
-            const SizedBox(width: 8),
+            Icon(Icons.medical_services, color: Color(0xFFF07E2B), size: 28),
+            SizedBox(width: 8),
             RichText(
-              text: const TextSpan(
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                children: [
-                  TextSpan(text: 'Paw', style: TextStyle(color: Color(0xFF0F2E53))),
-                  TextSpan(text: 'Rent', style: TextStyle(color: Color(0xFFF07E2B))),
+              text: TextSpan(
+                style: TextStyle(fontSize: R.sp(context, 22), fontWeight: FontWeight.bold),
+                children: const [
+                  TextSpan(text: 'Pet', style: TextStyle(color: Color(0xFF0F2E53))),
+                  TextSpan(text: 'Care', style: TextStyle(color: Color(0xFFF07E2B))),
                   TextSpan(text: ' Clinic', style: TextStyle(color: Color(0xFF90CAF9), fontSize: 16)),
                 ],
               ),
@@ -124,10 +141,6 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Color(0xFF0F2E53)),
-            onPressed: () {},
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: ClipOval(
@@ -160,8 +173,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFFF07E2B),
         unselectedItemColor: Colors.grey,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+        selectedLabelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 12)),
+        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: R.sp(context, 12)),
         items: [
           BottomNavigationBarItem(icon: Icon(_menuItems[0]['icon']), label: 'Trang chủ'),
           BottomNavigationBarItem(icon: Icon(_menuItems[1]['icon']), label: 'Lịch hẹn'),
@@ -202,12 +215,12 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 12),
           color: const Color(0xFFF5F6FA),
           child: Text(
             _menuItems[index]['title'],
-            style: const TextStyle(
-              fontSize: 18,
+            style: TextStyle(
+              fontSize: R.sp(context, 18),
               fontWeight: FontWeight.bold,
               color: Color(0xFF0F2E53),
             ),
@@ -242,8 +255,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         children: [
         // Custom Calendar
         Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(16),
+          margin: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
+          padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -265,7 +278,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                       });
                     },
                   ),
-                  Text('Tháng ${_currentMonthSchedule.month} ${_currentMonthSchedule.year}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                  Text('Tháng ${_currentMonthSchedule.month} ${_currentMonthSchedule.year}', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
                   IconButton(
                     icon: const Icon(Icons.chevron_right),
                     onPressed: () {
@@ -280,16 +293,18 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
-                    .map((d) => Text(d, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)))
+                    .map((d) => Expanded(
+                          child: Text(d, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                        ))
                     .toList(),
               ),
               const SizedBox(height: 8),
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 7,
-                  childAspectRatio: 0.8,
+                  childAspectRatio: R.isSmall(context) ? 0.6 : 0.8,
                 ),
                 itemCount: 42,
                 itemBuilder: (ctx, i) {
@@ -314,7 +329,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                       });
                     },
                     child: Container(
-                      margin: const EdgeInsets.all(2),
+                      margin: EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         color: isSelected ? const Color(0xFFFFF8F0) : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
@@ -323,7 +338,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(6),
+                            padding: EdgeInsets.all(6),
                             decoration: BoxDecoration(
                               color: isSelected ? const Color(0xFF0F2E53) : Colors.transparent,
                               shape: BoxShape.circle,
@@ -337,14 +352,17 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                             ),
                           ),
                           if (appCount > 0) ...[
-                            const SizedBox(height: 4),
+                            SizedBox(height: 4),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: EdgeInsets.symmetric(horizontal: 2, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.blue.shade50,
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Text('$appCount lịch', style: TextStyle(fontSize: 9, color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text('$appCount lịch', style: TextStyle(fontSize: R.sp(context, 9), color: Colors.blue.shade800, fontWeight: FontWeight.bold)),
+                              ),
                             ),
                           ],
                         ],
@@ -358,8 +376,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         ),
         // Day list
         Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            padding: const EdgeInsets.all(16),
+            margin: EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -371,7 +389,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${_selectedScheduleDate.day}/${_selectedScheduleDate.month}/${_selectedScheduleDate.year}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                Text('${_selectedScheduleDate.day}/${_selectedScheduleDate.month}/${_selectedScheduleDate.year}', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
                 Text('${dayApps.length} lịch hẹn', style: const TextStyle(color: Colors.grey)),
                 const SizedBox(height: 16),
                 dayApps.isEmpty
@@ -383,7 +401,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                         itemBuilder: (ctx, i) {
                             final app = dayApps[i];
                             final petName = (app['pet'] is Map) ? (app['pet']['name'] ?? 'Thú cưng') : ((app['petId'] is Map) ? (app['petId']['name'] ?? 'Thú cưng') : 'Thú cưng');
-                            final serviceName = (app['service'] is Map) ? (app['service']['name'] ?? 'Dịch vụ') : (app['service']?.toString() ?? 'Dịch vụ');
+                            final serviceName = (app['service'] is Map) ? (app['service']['name'] ?? 'Dịch vụ') : (_servicesMap[app['service']?.toString()] ?? app['service']?.toString() ?? 'Dịch vụ');
                             
                             String startTime = '';
                             if (app['timeSlot'] != null && app['timeSlot'] is Map) {
@@ -408,8 +426,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                             else if (statusStr == 'đã_hủy') statusDisplay = 'Đã hủy';
 
                             return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(12),
+                              margin: EdgeInsets.only(bottom: 12),
+                              padding: EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
@@ -420,11 +438,11 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Text(startTime.isNotEmpty ? startTime : '--:--', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 13)),
-                                  const SizedBox(width: 12),
+                                  Text(startTime.isNotEmpty ? startTime : '--:--', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: R.sp(context, 13))),
+                                  SizedBox(width: 12),
                                   Expanded(
                                     child: Container(
-                                      padding: const EdgeInsets.all(10),
+                                      padding: EdgeInsets.all(10),
                                       decoration: BoxDecoration(
                                         color: statusDisplay == 'Hoàn thành' ? Colors.green.shade50 : (statusDisplay == 'Đã xác nhận' ? Colors.blue.shade50 : (statusDisplay == 'Đang khám' ? Colors.purple.shade50 : (statusDisplay == 'Đã hủy' ? Colors.red.shade50 : Colors.orange.shade50))),
                                         borderRadius: BorderRadius.circular(8),
@@ -433,8 +451,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(petName, style: TextStyle(fontWeight: FontWeight.bold, color: statusDisplay == 'Hoàn thành' ? Colors.green.shade800 : Colors.blue.shade900)),
-                                          Text(serviceName, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                                          Text(statusDisplay, style: const TextStyle(fontSize: 11, color: Colors.black38)),
+                                          Text(serviceName, style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black54)),
+                                          Text(statusDisplay, style: TextStyle(fontSize: R.sp(context, 11), color: Colors.black38)),
                                         ],
                                       ),
                                     ),
@@ -456,44 +474,47 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
     final docName = _currentUser?['fullName'] ?? _currentUser?['name'] ?? 'Bác sĩ';
     
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(R.hPad(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Xin chào, $docName 👋',
-            style: const TextStyle(
-              fontSize: 24,
+            style: TextStyle(
+              fontSize: R.sp(context, 24),
               fontWeight: FontWeight.bold,
               color: Color(0xFF0F2E53),
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: 8),
+          Text(
             'Chúc bạn một ngày làm việc hiệu quả!',
-            style: TextStyle(color: Colors.grey, fontSize: 14),
+            style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 14)),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           
           // Stats Row
-          Row(
-            children: [
-              Expanded(child: _buildStatCard('Lịch hôm nay', _getTodayCount().toString(), Icons.calendar_today, const Color(0xFF4CA1AF))),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard('Đang chờ', _getPendingCount().toString(), Icons.hourglass_empty, const Color(0xFFF07E2B))),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard('Hoàn thành', _getCompletedCount().toString(), Icons.check_circle_outline, const Color(0xFF43A047))),
-            ],
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _buildStatCard('Lịch hôm nay', _getTodayCount().toString(), Icons.calendar_today, const Color(0xFF4CA1AF))),
+                SizedBox(width: 8),
+                Expanded(child: _buildStatCard('Đang chờ', _getPendingCount().toString(), Icons.hourglass_empty, const Color(0xFFF07E2B))),
+                SizedBox(width: 8),
+                Expanded(child: _buildStatCard('Hoàn thành', _getCompletedCount().toString(), Icons.check_circle_outline, const Color(0xFF43A047))),
+              ],
+            ),
           ),
           
-          const SizedBox(height: 30),
+          SizedBox(height: 30),
           
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Lịch hẹn hôm nay',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53)),
+                style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F2E53)),
               ),
               TextButton(
                 onPressed: () => setState(() => _selectedIndex = 1),
@@ -504,10 +525,20 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
           const SizedBox(height: 12),
           
           if (_isLoading)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: CircularProgressIndicator(color: Color(0xFFF07E2B)),
-            ))
+            Shimmer.fromColors(
+              baseColor: Colors.grey.shade200,
+              highlightColor: Colors.grey.shade50,
+              child: Column(
+                children: List.generate(3, (index) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                )),
+              ),
+            )
           else if (_getTodayAppointments().isEmpty)
             const Center(child: Padding(
               padding: EdgeInsets.all(20.0),
@@ -527,7 +558,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
               final String time = endTime.isNotEmpty ? '$startTime - $endTime' : startTime;
               
               final petName = (app['pet'] is Map) ? (app['pet']['name'] ?? 'Thú cưng') : ((app['petId'] is Map) ? (app['petId']['name'] ?? 'Thú cưng') : 'Thú cưng');
-              final serviceName = (app['service'] is Map) ? (app['service']['name'] ?? 'Dịch vụ') : (app['service']?.toString() ?? 'Dịch vụ');
+              final serviceName = (app['service'] is Map) ? (app['service']['name'] ?? 'Dịch vụ') : (_servicesMap[app['service']?.toString()] ?? app['service']?.toString() ?? 'Dịch vụ');
               
               final String status = app['status']?.toString().toLowerCase() ?? 'chờ_xác_nhận';
               String statusDisplay = 'Chờ xác nhận';
@@ -537,8 +568,9 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
               else if (status == 'đã_hủy') statusDisplay = 'Đã hủy';
               
               final petId = (app['pet'] is Map) ? (app['pet']['_id'] ?? app['pet']['id']) : ((app['petId'] is Map) ? (app['petId']['_id'] ?? app['petId']['id']) : (app['petId'] ?? app['pet']));
+              final ownerName = (app['user'] is Map) ? (app['user']['fullName'] ?? app['user']['name'] ?? 'Khách hàng') : ((app['userId'] is Map) ? (app['userId']['fullName'] ?? app['userId']['name'] ?? 'Khách hàng') : 'Khách hàng');
               
-              return _buildUpcomingAppointmentCard(time, petName, serviceName, statusDisplay, app['date'], petId?.toString());
+              return _buildUpcomingAppointmentCard(time, petName, ownerName, serviceName, statusDisplay, app['date'], petId?.toString());
             }),
         ],
       ),
@@ -595,7 +627,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -609,29 +641,33 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 12),
+          Icon(icon, color: color, size: R.sp(context, 24)),
+          SizedBox(height: 8),
           Text(
             value,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color),
+            style: TextStyle(fontSize: R.sp(context, 20), fontWeight: FontWeight.bold, color: color),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             title,
-            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: R.sp(context, 11), color: Colors.grey, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildUpcomingAppointmentCard(String time, String petName, String service, String status, dynamic dateStr, String? petId) {
+  Widget _buildUpcomingAppointmentCard(String time, String petName, String ownerName, String service, String status, dynamic dateStr, String? petId) {
     String dateDisplay = '';
     if (dateStr != null) {
       final d = DateTime.tryParse(dateStr.toString());
-      if (d != null) dateDisplay = DateFormat('dd/MM/yyyy').format(d) + ' • ';
+      if (d != null) dateDisplay = DateFormat('dd/MM/yyyy').format(d);
     }
     
     return GestureDetector(
@@ -652,8 +688,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(bottom: 12),
+        padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -663,42 +699,62 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: R.isSmall(context) ? 8 : 12, vertical: R.isSmall(context) ? 6 : 8),
             decoration: BoxDecoration(
               color: const Color(0xFFFFF8F0),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              time,
-              style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: 13),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  time,
+                  style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 13)),
+                ),
+                if (dateDisplay.isNotEmpty) ...[
+                  SizedBox(height: 4),
+                  Text(
+                    dateDisplay,
+                    style: TextStyle(color: const Color(0xFFF07E2B), fontSize: R.sp(context, 11)),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: R.isSmall(context) ? 8 : 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(petName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2E53))),
-                const SizedBox(height: 4),
-                Text('$dateDisplay$service', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(petName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFF0F2E53)))),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: R.isSmall(context) ? 6 : 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: status == 'Hoàn thành' ? Colors.green.shade50 : (status == 'Đã xác nhận' ? Colors.blue.shade50 : (status == 'Đang khám' ? Colors.purple.shade50 : (status == 'Đã hủy' ? Colors.red.shade50 : Colors.orange.shade50))),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          color: status == 'Hoàn thành' ? Colors.green.shade700 : (status == 'Đã xác nhận' ? Colors.blue.shade700 : (status == 'Đang khám' ? Colors.purple.shade700 : (status == 'Đã hủy' ? Colors.red.shade700 : Colors.orange.shade700))), 
+                          fontSize: R.sp(context, 11), 
+                          fontWeight: FontWeight.w600
+                        ),
+                      ),
+                    ),
+                  ]
+                ),
+                SizedBox(height: 4),
+                Text('Chủ nuôi: $ownerName', style: TextStyle(color: Colors.grey.shade700, fontSize: R.sp(context, 13))),
+                SizedBox(height: 2),
+                Text(service, style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 13)), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: status == 'Hoàn thành' ? Colors.green.shade50 : (status == 'Đã xác nhận' ? Colors.blue.shade50 : (status == 'Đang khám' ? Colors.purple.shade50 : (status == 'Đã hủy' ? Colors.red.shade50 : Colors.orange.shade50))),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                color: status == 'Hoàn thành' ? Colors.green.shade700 : (status == 'Đã xác nhận' ? Colors.blue.shade700 : (status == 'Đang khám' ? Colors.purple.shade700 : (status == 'Đã hủy' ? Colors.red.shade700 : Colors.orange.shade700))), 
-                fontSize: 12, 
-                fontWeight: FontWeight.w600
-              ),
             ),
           ),
         ],
@@ -754,12 +810,12 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 16),
           color: const Color(0xFFF5F6FA),
-          child: const Text(
+          child: Text(
             'Quản lý lịch hẹn',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: R.sp(context, 20),
               fontWeight: FontWeight.bold,
               color: Color(0xFF0F2E53),
             ),
@@ -767,23 +823,38 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         ),
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
+              ? ListView.builder(
+                  padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
+                  itemCount: 5,
+                  itemBuilder: (_, __) => Shimmer.fromColors(
+                    baseColor: Colors.grey.shade200,
+                    highlightColor: Colors.grey.shade50,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      height: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _fetchAppointments,
                   color: const Color(0xFFF07E2B),
                   child: _appointments.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          children: const [
+                          children: [
                             SizedBox(height: 100),
                             Center(
-                              child: Text('Chưa có lịch hẹn nào.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                              child: Text('Chưa có lịch hẹn nào.', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 16))),
                             ),
                           ],
                         )
                       : ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
                           itemCount: sortedApps.length,
                           itemBuilder: (context, i) {
                             final app = sortedApps[i];
@@ -807,7 +878,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                             
                             final petName = (app['pet'] is Map) ? (app['pet']['name'] ?? 'Thú cưng') : ((app['petId'] is Map) ? (app['petId']['name'] ?? 'Thú cưng') : 'Thú cưng');
                             final ownerName = (app['user'] is Map) ? (app['user']['fullName'] ?? app['user']['name'] ?? 'Khách hàng') : ((app['userId'] is Map) ? (app['userId']['fullName'] ?? app['userId']['name'] ?? 'Khách hàng') : 'Khách hàng');
-                            final serviceName = (app['service'] is Map) ? (app['service']['name'] ?? 'Dịch vụ') : (app['service']?.toString() ?? 'Dịch vụ');
+                            final serviceName = (app['service'] is Map) ? (app['service']['name'] ?? 'Dịch vụ') : (_servicesMap[app['service']?.toString()] ?? app['service']?.toString() ?? 'Dịch vụ');
                             
                             final String status = app['status']?.toString().toLowerCase() ?? 'chờ_xác_nhận';
                             String statusDisplay = 'Chờ xác nhận';
@@ -879,7 +950,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         }
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -893,18 +964,18 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
           children: [
           // Header (Status)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 12),
             decoration: BoxDecoration(
               color: statusBgColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Trạng thái', style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.bold)),
+                Text('Trạng thái', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black54, fontWeight: FontWeight.bold)),
                 Text(
                   statusDisplay,
-                  style: TextStyle(color: statusColor, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: statusColor, fontSize: R.sp(context, 13), fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -912,7 +983,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
           
           // Details
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
             child: Column(
               children: [
                 _buildInfoRow(Icons.pets, 'Thú cưng', petName),
@@ -968,7 +1039,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                       ),
                       child: Text(
                         (statusDisplay == 'Chờ xác nhận') ? 'Xác nhận lịch hẹn' : ((statusDisplay == 'Đã xác nhận') ? (serviceName.toLowerCase().contains('tiêm') || serviceName.toLowerCase().contains('vaccine') ? 'Bắt đầu tiêm phòng' : 'Bắt đầu khám bệnh') : 'Nhập kết quả'),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1018,7 +1089,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                       ),
                       child: Text(
                         (serviceName.toLowerCase().contains('tiêm') || serviceName.toLowerCase().contains('vaccine')) ? 'Xem thông tin bản tiêm' : 'Xem kết quả',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)
+                        style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold)
                       ),
                     ),
                   ),
@@ -1037,20 +1108,20 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, size: 20, color: const Color(0xFF0F2E53).withOpacity(0.6)),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         SizedBox(
           width: 80,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.grey, fontSize: 14),
+            style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 14)),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
-              fontSize: 14,
+              fontSize: R.sp(context, 14),
               color: Color(0xFF0F2E53),
             ),
           ),
@@ -1064,12 +1135,12 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 16),
           color: const Color(0xFFF5F6FA),
-          child: const Text(
+          child: Text(
             'Hồ sơ thú cưng',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: R.sp(context, 20),
               fontWeight: FontWeight.bold,
               color: Color(0xFF0F2E53),
             ),
@@ -1077,23 +1148,23 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         ),
         Expanded(
           child: _isLoadingPets
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
+              ? Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
               : RefreshIndicator(
                   onRefresh: _fetchAllPets,
                   color: const Color(0xFFF07E2B),
                   child: _allPets.isEmpty
                       ? ListView(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          children: const [
+                          children: [
                             SizedBox(height: 100),
                             Center(
-                              child: Text('Không có hồ sơ thú cưng nào.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                              child: Text('Không có hồ sơ thú cưng nào.', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 16))),
                             ),
                           ],
                         )
                       : ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
                           itemCount: _allPets.length,
                           itemBuilder: (context, index) {
                             final pet = _allPets[index];
@@ -1121,7 +1192,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                                 }
                               },
                               child: Container(
-                                margin: const EdgeInsets.only(bottom: 16),
+                                margin: EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(16),
@@ -1131,29 +1202,29 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                                   ],
                                 ),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
                                   child: Row(
                                     children: [
                                     CircleAvatar(
                                       radius: 30,
                                       backgroundColor: Colors.grey.shade200,
                                       backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-                                      child: avatarUrl == null ? const Icon(Icons.pets, color: Colors.grey, size: 30) : null,
+                                      child: avatarUrl == null ? Icon(Icons.pets, color: Colors.grey, size: 30) : null,
                                     ),
-                                    const SizedBox(width: 16),
+                                    SizedBox(width: 16),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2E53))),
-                                          const SizedBox(height: 4),
-                                          Text('Giống: $breed', style: const TextStyle(color: Colors.grey, fontSize: 14)),
-                                          const SizedBox(height: 4),
+                                          Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFF0F2E53))),
+                                          SizedBox(height: 4),
+                                          Text('Giống: $breed', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 14))),
+                                          SizedBox(height: 4),
                                           Row(
                                             children: [
-                                              const Icon(Icons.person, size: 14, color: Colors.grey),
-                                              const SizedBox(width: 4),
-                                              Text('Chủ: $ownerName', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                                              Icon(Icons.person, size: 14, color: Colors.grey),
+                                              SizedBox(width: 4),
+                                              Text('Chủ: $ownerName', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 13))),
                                             ],
                                           )
                                         ],
@@ -1177,95 +1248,108 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
     if (petId == null) return;
     final TextEditingController vaccineNameController = TextEditingController();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nhập kết quả tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Tên thuốc tiêm / Bệnh tiêm phòng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Nhập kết quả tiêm phòng', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
+              const SizedBox(height: 20),
+            Text('Tên thuốc tiêm / Bệnh tiêm phòng', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
             TextField(
               controller: vaccineNameController,
               decoration: InputDecoration(
                 hintText: 'Nhập tên vaccine...',
-                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (vaccineNameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên vaccine')));
-                return;
-              }
-              Navigator.pop(ctx);
-              
-              try {
-                showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
-                
-                final apptId = appt['_id'] ?? appt['id'];
-                final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? _currentUser!['id'] ?? _currentUser!['_id']);
-                final dateStr = (appt['date'] != null && appt['date'] != '---') ? appt['date'] : DateTime.now().toIso8601String();
-                
-                final payload = {
-                  'pet': petId,
-                  'vet': apptVetId,
-                  'name': vaccineNameController.text.trim(),
-                  'vaccineName': vaccineNameController.text.trim(),
-                  'disease': vaccineNameController.text.trim(),
-                  'dateAdministered': dateStr,
-                  'date': dateStr,
-                  'nextDate': DateTime.now().add(const Duration(days: 365)).toIso8601String(),
-                  'status': 'Đã tiêm',
-                  'appointment': apptId,
-                };
-                
-                await BookingService().addVaccination(_currentUser!['token'], payload);
-                await BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, 'hoàn_thành');
-                
-                if (!mounted) return;
-                Navigator.pop(context); // Close loading
-                
-                setState(() => _isLoading = true);
-                _fetchAppointments();
-                
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Thành công', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                    content: const Text('Nhập kết quả thành công.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Đóng'),
-                      ),
-                    ],
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
                   ),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                Navigator.pop(context); // Close loading
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF07E2B),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Lưu kết quả'),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (vaccineNameController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên vaccine')));
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      
+                      try {
+                        showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+                        
+                        final apptId = appt['_id'] ?? appt['id'];
+                        final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? _currentUser!['id'] ?? _currentUser!['_id']);
+                        final dateStr = (appt['date'] != null && appt['date'] != '---') ? appt['date'] : DateTime.now().toIso8601String();
+                        
+                        final payload = {
+                          'pet': petId,
+                          'vet': apptVetId,
+                          'name': vaccineNameController.text.trim(),
+                          'vaccineName': vaccineNameController.text.trim(),
+                          'disease': vaccineNameController.text.trim(),
+                          'dateAdministered': dateStr,
+                          'date': dateStr,
+                          'nextDate': DateTime.now().add(const Duration(days: 365)).toIso8601String(),
+                          'status': 'Đã tiêm',
+                          'appointment': apptId,
+                        };
+                        
+                        await BookingService().addVaccination(_currentUser!['token'], payload);
+                        await BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, 'hoàn_thành');
+                        
+                        if (!mounted) return;
+                        Navigator.pop(context); // Close loading
+                        
+                        setState(() => _isLoading = true);
+                        _fetchAppointments();
+                        
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Thành công', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                            content: const Text('Nhập kết quả thành công.'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('Đóng'),
+                              ),
+                            ],
+                          ),
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        Navigator.pop(context); // Close loading
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF07E2B),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Lưu kết quả'),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1280,78 +1364,84 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
     final TextEditingController tempController = TextEditingController();
     List<String> selectedImagePaths = [];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (dialogContext, setLocalState) {
-          return AlertDialog(
-            title: const Text('Nhập kết quả khám bệnh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-            content: SingleChildScrollView(
+          return Container(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Đánh giá chung', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                  Text('Nhập kết quả khám bệnh', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
+                  const SizedBox(height: 20),
+                  Text('Đánh giá chung', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
                   TextField(
                     controller: generalAssessmentController,
                     decoration: InputDecoration(
                       hintText: 'Nhập đánh giá chung...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Tư vấn', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 16),
+                  Text('Tư vấn', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
                   TextField(
                     controller: consultationController,
                     maxLines: 3,
                     decoration: InputDecoration(
                       hintText: 'Nhập tư vấn / ghi chú...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Cân nặng (kg)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
+                            Text('Cân nặng (kg)', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                            SizedBox(height: 8),
                             TextField(
                               controller: weightController,
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 hintText: 'VD: 5.2',
-                                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                                hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Nhiệt độ (°C)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
+                            Text('Nhiệt độ (°C)', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                            SizedBox(height: 8),
                             TextField(
                               controller: tempController,
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 hintText: 'VD: 38.5',
-                                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                                hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
                             ),
                           ],
@@ -1359,8 +1449,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text('Hình ảnh (kết quả X-quang, siêu âm,...)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 16),
+                  Text('Hình ảnh (kết quả X-quang, siêu âm,...)', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -1403,73 +1493,78 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (generalAssessmentController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập đánh giá chung')));
+                            return;
+                          }
+                          Navigator.pop(ctx); 
+
+                          final apptId = appt['_id'] ?? appt['id'];
+                          final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? _currentUser!['id'] ?? _currentUser!['_id']);
+                          final apptServiceId = (appt['service'] is Map) ? (appt['service']['_id'] ?? appt['service']['id']) : appt['service'];
+                          final payload = {
+                            'pet': petId,
+                            'vet': apptVetId,
+                            'service': apptServiceId,
+                            'appointment': apptId,
+                            'generalAssessment': generalAssessmentController.text.trim(),
+                            'consultation': consultationController.text.trim(),
+                            'weight': weightController.text.trim().isEmpty ? null : double.tryParse(weightController.text.trim()),
+                            'temperature': tempController.text.trim().isEmpty ? null : double.tryParse(tempController.text.trim()),
+                            'examinationDate': DateTime.now().toIso8601String(),
+                          };
+                          final snappedPaths = List<String>.from(selectedImagePaths);
+
+                          Future.wait([
+                            BookingService().addHealthRecord(_currentUser!['token'], payload, imagePaths: snappedPaths),
+                            BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, 'hoàn_thành'),
+                          ]).then((results) {
+                            if (!mounted) return;
+                            setState(() => _isLoading = true);
+                            _fetchAppointments();
+                            
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Thành công', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                content: const Text('Nhập kết quả thành công.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Đóng'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).catchError((e) {
+                            if (!mounted) return;
+                            setState(() => _isLoading = true);
+                            _fetchAppointments();
+                            ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF07E2B),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Lưu kết quả'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  if (generalAssessmentController.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập đánh giá chung')));
-                    return;
-                  }
-                  Navigator.pop(ctx); 
-
-                  final apptId = appt['_id'] ?? appt['id'];
-                  final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? _currentUser!['id'] ?? _currentUser!['_id']);
-                  final apptServiceId = (appt['service'] is Map) ? (appt['service']['_id'] ?? appt['service']['id']) : appt['service'];
-                  final payload = {
-                    'pet': petId,
-                    'vet': apptVetId,
-                    'service': apptServiceId,
-                    'appointment': apptId,
-                    'generalAssessment': generalAssessmentController.text.trim(),
-                    'consultation': consultationController.text.trim(),
-                    'weight': weightController.text.trim().isEmpty ? null : double.tryParse(weightController.text.trim()),
-                    'temperature': tempController.text.trim().isEmpty ? null : double.tryParse(tempController.text.trim()),
-                    'examinationDate': DateTime.now().toIso8601String(),
-                  };
-                  final snappedPaths = List<String>.from(selectedImagePaths);
-
-                  Future.wait([
-                    BookingService().addHealthRecord(_currentUser!['token'], payload, imagePaths: snappedPaths),
-                    BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, 'hoàn_thành'),
-                  ]).then((results) {
-                    if (!mounted) return;
-                    setState(() => _isLoading = true);
-                    _fetchAppointments();
-                    
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Thành công', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                        content: const Text('Nhập kết quả thành công.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Đóng'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).catchError((e) {
-                    if (!mounted) return;
-                    setState(() => _isLoading = true);
-                    _fetchAppointments();
-                    ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF07E2B),
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Lưu kết quả'),
-              ),
-            ],
           );
         },
       ),
@@ -1508,7 +1603,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Kết quả khám bệnh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          title: Text('Kết quả khám bệnh', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1520,8 +1615,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                 _buildDetailRow('Cân nặng:', '$weight kg'),
                 _buildDetailRow('Nhiệt độ:', '$temperature °C'),
                 if (imageUrls.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  const Text('Hình ảnh', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 12),
+                  Text('Hình ảnh', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -1578,7 +1673,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Thông tin tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          title: Text('Thông tin tiêm phòng', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1600,12 +1695,12 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: EdgeInsets.only(bottom: 8.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey))),
-          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text(label, style: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey))),
+          Expanded(flex: 3, child: Text(value, style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold))),
         ],
       ),
     );

@@ -1,12 +1,14 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:pet_care/utils/responsive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pet_care/config/app_config.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/services/booking_service.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:pet_care/screens/booking_screen.dart';
+import 'package:shimmer/shimmer.dart';
 
 class PetDetailScreen extends StatefulWidget {
   final String petId;
@@ -61,10 +63,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         BookingService().getAllAppointments(widget.user['token'], limit: 100, petId: widget.petId),
         BookingService().getVaccinationsByPetId(widget.user['token'], widget.petId),
         BookingService().getHealthRecordsByPetId(widget.user['token'], widget.petId),
+        AuthService().getVets(limit: 100).catchError((e) { print('Error fetching vets: $e'); return []; }),
       ]);
       final data = results[0];
       final vaccines = results[1];
       final healthRecords = results[2];
+      final vetsList = results[3];
       
       final petId = widget.petId;
       final upcoming = <dynamic>[];
@@ -76,17 +80,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       final Map<String, String> apptToVaccine = {};
       final Map<String, String> apptToHealthRecord = {};
       
-      try {
-        final vetsList = await AuthService().getVets(limit: 100);
-        for (var vet in vetsList) {
-          final vId = vet['_id']?.toString() ?? vet['id']?.toString();
-          final vName = vet['fullName']?.toString() ?? vet['name']?.toString();
-          if (vId != null && vName != null) {
-            vetNames[vId] = vName;
-          }
+      for (var vet in vetsList) {
+        final vId = vet['_id']?.toString() ?? vet['id']?.toString();
+        final vName = vet['fullName']?.toString() ?? vet['name']?.toString();
+        if (vId != null && vName != null) {
+          vetNames[vId] = vName;
         }
-      } catch (e) {
-        print('Error fetching vets: $e');
       }
       
       for (var appt in data) {
@@ -375,7 +374,24 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         ],
       ),
       body: _isLoading 
-          ? const Center(child: CircularProgressIndicator())
+          ? Padding(
+              padding: EdgeInsets.all(R.hPad(context)),
+              child: Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade50,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const CircleAvatar(radius: 50, backgroundColor: Colors.white),
+                    const SizedBox(height: 16),
+                    Container(height: 24, width: 150, color: Colors.white),
+                    const SizedBox(height: 24),
+                    for (int i = 0; i < 5; i++)
+                      Container(height: 50, margin: const EdgeInsets.only(bottom: 10), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
+                  ],
+                ),
+              ),
+            )
           : _pet == null
               ? const Center(child: Text('Không tìm thấy thông tin'))
               : _isEditing 
@@ -387,7 +403,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   Widget _buildPetDetails() {
     final avatarUrl = _pet!['avatar'];
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(R.hPad(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -395,10 +411,10 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             radius: 50,
             backgroundColor: Colors.grey[200],
             backgroundImage: (avatarUrl != null && avatarUrl.toString().startsWith('http')) ? NetworkImage(avatarUrl) : null,
-            child: (avatarUrl == null || !avatarUrl.toString().startsWith('http')) ? const Icon(Icons.pets, size: 50, color: Colors.grey) : null,
+            child: (avatarUrl == null || !avatarUrl.toString().startsWith('http')) ? Icon(Icons.pets, size: 50, color: Colors.grey) : null,
           ),
-          const SizedBox(height: 16),
-          Text(_pet!['name'] ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          SizedBox(height: 16),
+          Text(_pet!['name'] ?? '', style: TextStyle(fontSize: R.sp(context, 24), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
           const SizedBox(height: 24),
           _buildInfoRow('Loài', _translateSpecies(_pet!['species']?.toString())),
           _buildInfoRow('Giống loài', _pet!['breed']),
@@ -469,7 +485,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   Widget _buildEditForm() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(R.hPad(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -558,7 +574,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             child: Container(
               width: double.infinity,
               height: 200,
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFFDFDACB),
                 borderRadius: BorderRadius.circular(12),
@@ -569,7 +585,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                   ? Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity)
                   : (_pet!['avatar'] != null && _pet!['avatar'].toString().startsWith('http'))
                       ? Image.network(_pet!['avatar'], fit: BoxFit.cover, width: double.infinity)
-                      : const Column(
+                      : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.add_photo_alternate, color: Color(0xFF4B5563), size: 36),
@@ -584,7 +600,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           _buildLabeledField('Ghi chú đặc biệt', controller: _petNotesController, maxLines: 2),
 
           CheckboxListTile(
-            title: const Text('Đã triệt sản'),
+            title: Text('Đã triệt sản'),
             value: _isSpayed,
             onChanged: (v) => setState(() => _isSpayed = v ?? false),
             controlAffinity: ListTileControlAffinity.leading,
@@ -592,7 +608,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             activeColor: const Color(0xFFF07E2B),
           ),
 
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           ElevatedButton(
             onPressed: _isUpdating ? null : _updatePet,
             style: ElevatedButton.styleFrom(
@@ -602,8 +618,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: _isUpdating
-                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Lưu thông tin', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text('Lưu thông tin', style: TextStyle(fontSize: R.sp(context, 16), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -612,8 +628,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   Widget _buildLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF4B5563))),
+      padding: EdgeInsets.only(bottom: 6),
+      child: Text(text, style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold, color: Color(0xFF4B5563))),
     );
   }
 
@@ -623,7 +639,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       children: [
         _buildLabel(label),
         Container(
-          margin: const EdgeInsets.only(bottom: 16),
+          margin: EdgeInsets.only(bottom: 16),
           child: TextField(
             controller: controller,
             keyboardType: isNumber ? TextInputType.number : TextInputType.text,
@@ -632,7 +648,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               filled: true,
               fillColor: const Color(0xFFDFDACB),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 14),
             ),
           ),
         ),
@@ -643,7 +659,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   Widget _buildTextField(String hint, {TextEditingController? controller, bool isNumber = false, int maxLines = 1}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: controller,
         keyboardType: isNumber ? TextInputType.number : TextInputType.text,
@@ -653,7 +669,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           filled: true,
           fillColor: const Color(0xFFDFDACB),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 14),
         ),
       ),
     );
@@ -661,13 +677,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   Widget _buildDropdown(String hint, Map<String, String> items, String? value, ValueChanged<String?> onChanged) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
         decoration: InputDecoration(
           filled: true,
           fillColor: const Color(0xFFDFDACB),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 14),
         ),
         hint: Text(hint, style: const TextStyle(color: Color(0xFF4B5563))),
         value: items.containsKey(value) ? value : null,
@@ -688,15 +704,15 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
-                  children: const [
+                  children: [
                     Icon(Icons.calendar_today, color: Color(0xFF0F4C81), size: 20),
                     SizedBox(width: 8),
-                    Text('Lịch hẹn sắp tới', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                    Text('Lịch hẹn sắp tới', style: TextStyle(fontSize: R.sp(context, 16), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
                   ],
                 ),
                 if (!isVet)
@@ -719,26 +735,33 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     backgroundColor: const Color(0xFFE06C3A),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 8),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: const Text('+ Đặt lịch', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text('+ Đặt lịch', style: TextStyle(fontSize: R.sp(context, 12), fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
           ),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
           if (_isLoadingAppointments)
-            const Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Center(child: CircularProgressIndicator()),
+            Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade50,
+                child: Container(
+                  height: 100,
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             )
           else if (_upcomingAppointments.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(24.0),
               child: Center(
-                child: Text('Chưa có lịch hẹn sắp tới', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                child: Text('Chưa có lịch hẹn sắp tới', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 13))),
               ),
             )
           else
@@ -780,9 +803,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               }
 
               return Padding(
-                padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+                padding: EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
                 child: Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade200),
                     borderRadius: BorderRadius.circular(12),
@@ -795,30 +818,36 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(startTime.isNotEmpty ? startTime : '--:--', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                              const SizedBox(height: 4),
-                              Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              Text(startTime.isNotEmpty ? startTime : '--:--', style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                              SizedBox(height: 4),
+                              Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.grey)),
                             ],
                           ),
-                          const SizedBox(width: 16),
+                          SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(serviceName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-                                const SizedBox(height: 4),
-                                Text('BS. $vetName', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                Text(serviceName, style: TextStyle(fontSize: R.sp(context, 15), fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                                SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text('BS. $vetName', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(statusText, style: TextStyle(fontSize: R.sp(context, 10), color: statusColor, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(statusText, style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -865,7 +894,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                             ),
                             child: Text(
                               (status == 'chờ_xác_nhận' || status == 'pending') ? 'Xác nhận lịch hẹn' : ((status == 'đã_xác_nhận' || status == 'confirmed') ? (isVaccine ? 'Bắt đầu tiêm phòng' : 'Bắt đầu khám bệnh') : 'Nhập kết quả'),
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -911,7 +940,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                               side: const BorderSide(color: Colors.red),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: const Text('Hủy lịch hẹn', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            child: Text('Hủy lịch hẹn', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -936,48 +965,48 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
             child: Row(
-              children: const [
+              children: [
                 Icon(Icons.favorite_border, color: Color(0xFF0F4C81), size: 20),
                 SizedBox(width: 8),
-                Text('Lịch sử lịch hẹn', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                Text('Lịch sử lịch hẹn', style: TextStyle(fontSize: R.sp(context, 16), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
               ],
             ),
           ),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
             child: Row(
               children: [
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade300),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text('Tất cả dịch vụ', style: TextStyle(fontSize: 13, color: Colors.black87)),
+                      children: [
+                        Text('Tất cả dịch vụ', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.black87)),
                         Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.grey),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade300),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text('mm/dd/yyyy', style: TextStyle(fontSize: 13, color: Colors.black87)),
+                      children: [
+                        Text('mm/dd/yyyy', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.black87)),
                         Icon(Icons.calendar_today, size: 14, color: Colors.black87),
                       ],
                     ),
@@ -988,10 +1017,10 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
           if (_medicalHistory.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
               child: Center(
-                child: Text('Không tìm thấy lịch sử nào', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                child: Text('Không tìm thấy lịch sử nào', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 13))),
               ),
             )
           else ...[
@@ -1014,21 +1043,21 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
             child: Row(
-              children: const [
+              children: [
                 Icon(Icons.vaccines, color: Color(0xFF0F4C81), size: 20),
                 SizedBox(width: 8),
-                Text('Lịch sử Vaccine', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                Text('Lịch sử Vaccine', style: TextStyle(fontSize: R.sp(context, 16), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
               ],
             ),
           ),
           const Divider(height: 1, color: Color(0xFFEEEEEE)),
           if (_vaccineHistory.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 24.0),
               child: Center(
-                child: Text('Chưa có lịch sử tiêm vaccine', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                child: Text('Chưa có lịch sử tiêm vaccine', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 13))),
               ),
             )
           else ...[
@@ -1095,9 +1124,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     final vaccineName = vax['vaccineName'] ?? vax['name'] ?? 'Thuốc tiêm';
 
     return Padding(
-      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+      padding: EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.grey.shade50,
           border: Border.all(color: Colors.grey.shade200),
@@ -1109,30 +1138,36 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(time, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                const SizedBox(height: 4),
-                Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                Text(time, style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                SizedBox(height: 4),
+                Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: TextStyle(fontSize: R.sp(context, 12), fontWeight: FontWeight.bold, color: Colors.black87)),
               ],
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(vaccineName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-                  const SizedBox(height: 4),
-                  Text(vetName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  Text(vaccineName, style: TextStyle(fontSize: R.sp(context, 15), fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                  SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(vetName, style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.w600, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('Đã tiêm', style: TextStyle(fontSize: R.sp(context, 10), color: Colors.green, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text('Đã tiêm', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1162,9 +1197,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     final bool hasHealthRecord = apptId != null && _apptToHealthRecord.containsKey(apptId);
 
     return Padding(
-      padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
+      padding: EdgeInsets.only(left: 16.0, right: 16.0, bottom: 16.0),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.grey.shade50,
           border: Border.all(color: Colors.grey.shade200),
@@ -1178,35 +1213,41 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(startTime.isNotEmpty ? startTime : '--:--', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                    const SizedBox(height: 4),
-                    Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    Text(startTime.isNotEmpty ? startTime : '--:--', style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                    SizedBox(height: 4),
+                    Text(formattedDate.isNotEmpty ? formattedDate : '--/--/----', style: TextStyle(fontSize: R.sp(context, 12), fontWeight: FontWeight.bold, color: Colors.black87)),
                   ],
                 ),
-                const SizedBox(width: 16),
+                SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(serviceName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-                      const SizedBox(height: 4),
-                      Text('BS. $vetName', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      Text(serviceName, style: TextStyle(fontSize: R.sp(context, 15), fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                      SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text('BS. $vetName', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.w600, color: Colors.grey.shade700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text('Hoàn thành', style: TextStyle(fontSize: R.sp(context, 10), color: Colors.green, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text('Hoàn thành', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
             if (hasVaccine) ...[
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 height: 36,
@@ -1217,11 +1258,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     foregroundColor: const Color(0xFF0F4C81),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Xem thông tin bản tiêm', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  child: Text('Xem thông tin bản tiêm', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                 ),
               ),
             ] else if (hasHealthRecord) ...[
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 height: 36,
@@ -1232,7 +1273,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     foregroundColor: const Color(0xFF0F4C81),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Xem kết quả', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  child: Text('Xem kết quả', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                 ),
               ),
             ]
@@ -1280,7 +1321,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Kết quả khám bệnh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          title: Text('Kết quả khám bệnh', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1292,8 +1333,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 _buildDetailRow('Cân nặng:', '$weight kg'),
                 _buildDetailRow('Nhiệt độ:', '$temperature °C'),
                 if (imageUrls.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  const Text('Hình ảnh', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 12),
+                  Text('Hình ảnh', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -1367,7 +1408,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Thông tin tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          title: Text('Thông tin tiêm phòng', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1394,12 +1435,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: EdgeInsets.only(bottom: 8.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey))),
-          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text(label, style: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey))),
+          Expanded(flex: 3, child: Text(value, style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold))),
         ],
       ),
     );
@@ -1408,82 +1449,95 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   void _showVaccinationForm(dynamic appt) {
     final TextEditingController vaccineNameController = TextEditingController();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nhập kết quả tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Tên thuốc tiêm / Bệnh tiêm phòng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Nhập kết quả tiêm phòng', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
+              const SizedBox(height: 20),
+            Text('Tên thuốc tiêm / Bệnh tiêm phòng', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
             TextField(
               controller: vaccineNameController,
               decoration: InputDecoration(
                 hintText: 'Nhập tên vaccine...',
-                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               ),
             ),
-          ],
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (vaccineNameController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên vaccine')));
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      
+                      try {
+                        showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+                        
+                        final apptId = appt['_id'] ?? appt['id'];
+                        final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? widget.user['id']);
+                        final dateStr = (appt['date'] != null && appt['date'] != '---') ? appt['date'] : DateTime.now().toIso8601String();
+                        
+                        final payload = {
+                          'pet': widget.petId,
+                          'vet': apptVetId,
+                          'name': vaccineNameController.text.trim(),
+                          'vaccineName': vaccineNameController.text.trim(),
+                          'disease': vaccineNameController.text.trim(),
+                          'dateAdministered': dateStr,
+                          'date': dateStr,
+                          'nextDate': DateTime.now().add(const Duration(days: 365)).toIso8601String(),
+                          'status': 'Đã tiêm',
+                          'appointment': apptId,
+                        };
+                        
+                        await BookingService().addVaccination(widget.user['token'], payload);
+                        await BookingService().updateAppointmentStatus(widget.user['token'], apptId, 'hoàn_thành');
+                        
+                        if (!mounted) return;
+                        Navigator.pop(context); // Close loading
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu kết quả tiêm phòng')));
+                        
+                        setState(() => _isLoadingAppointments = true);
+                        _fetchAppointments();
+                      } catch (e) {
+                        if (!mounted) return;
+                        Navigator.pop(context); // Close loading
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF07E2B),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Lưu kết quả'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (vaccineNameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên vaccine')));
-                return;
-              }
-              Navigator.pop(ctx);
-              
-              try {
-                showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
-                
-                final apptId = appt['_id'] ?? appt['id'];
-                final apptVetId = (appt['vet'] is Map) ? (appt['vet']['_id'] ?? appt['vet']['id']) : (appt['vet'] ?? widget.user['id']);
-                final dateStr = (appt['date'] != null && appt['date'] != '---') ? appt['date'] : DateTime.now().toIso8601String();
-                
-                final payload = {
-                  'pet': widget.petId,
-                  'vet': apptVetId,
-                  'name': vaccineNameController.text.trim(),
-                  'vaccineName': vaccineNameController.text.trim(),
-                  'disease': vaccineNameController.text.trim(),
-                  'dateAdministered': dateStr,
-                  'date': dateStr,
-                  'nextDate': DateTime.now().add(const Duration(days: 365)).toIso8601String(),
-                  'status': 'Đã tiêm',
-                  'appointment': apptId,
-                };
-                
-                await BookingService().addVaccination(widget.user['token'], payload);
-                await BookingService().updateAppointmentStatus(widget.user['token'], apptId, 'hoàn_thành');
-                
-                if (!mounted) return;
-                Navigator.pop(context); // Close loading
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu kết quả tiêm phòng')));
-                
-                setState(() => _isLoadingAppointments = true);
-                _fetchAppointments();
-              } catch (e) {
-                if (!mounted) return;
-                Navigator.pop(context); // Close loading
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF07E2B),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Lưu kết quả'),
-          ),
-        ],
       ),
     );
   }
@@ -1495,78 +1549,84 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     final TextEditingController tempController = TextEditingController();
     List<String> selectedImagePaths = [];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setLocalState) {
-          return AlertDialog(
-            title: const Text('Nh\u1eadp k\u1ebft qu\u1ea3 kh\u00e1m b\u1ec7nh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-            content: SingleChildScrollView(
+          return Container(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('\u0110\u00e1nh gi\u00e1 chung', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                  Text('Nh\u1eadp k\u1ebft qu\u1ea3 kh\u00e1m b\u1ec7nh', style: TextStyle(fontSize: R.sp(context, 18), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
+                  const SizedBox(height: 20),
+                  Text('\u0110\u00e1nh gi\u00e1 chung', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
                   TextField(
                     controller: generalAssessmentController,
                     decoration: InputDecoration(
                       hintText: 'Nh\u1eadp \u0111\u00e1nh gi\u00e1 chung...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text('T\u01b0 v\u1ea5n', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 16),
+                  Text('T\u01b0 v\u1ea5n', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
                   TextField(
                     controller: consultationController,
                     maxLines: 3,
                     decoration: InputDecoration(
                       hintText: 'Nh\u1eadp t\u01b0 v\u1ea5n / ghi ch\u00fa...',
-                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('C\u00e2n n\u1eb7ng (kg)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
+                            Text('C\u00e2n n\u1eb7ng (kg)', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                            SizedBox(height: 8),
                             TextField(
                               controller: weightController,
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 hintText: 'VD: 5.2',
-                                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                                hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Nhi\u1ec7t \u0111\u1ed9 (\u00b0C)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
+                            Text('Nhi\u1ec7t \u0111\u1ed9 (\u00b0C)', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
+                            SizedBox(height: 8),
                             TextField(
                               controller: tempController,
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 hintText: 'VD: 38.5',
-                                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                                hintStyle: TextStyle(fontSize: R.sp(context, 13), color: Colors.grey),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               ),
                             ),
                           ],
@@ -1574,8 +1634,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text('H\u00ecnh \u1ea3nh (k\u1ebft qu\u1ea3 X-quang, si\u00eau \u00e2m,...)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 16),
+                  Text('H\u00ecnh \u1ea3nh (k\u1ebft qu\u1ea3 X-quang, si\u00eau \u00e2m,...)', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -1618,16 +1678,17 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('H\u1ee7y', style: TextStyle(color: Colors.grey)),
-              ),
-              ElevatedButton(
-                onPressed: () {
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('H\u1ee7y', style: TextStyle(color: Colors.grey)),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
                   if (generalAssessmentController.text.trim().isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui l\u00f2ng nh\u1eadp \u0111\u00e1nh gi\u00e1 chung')));
                     return;
@@ -1682,16 +1743,21 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('L\u1ed7i: ')));
                   });
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF07E2B),
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('L\u01b0u k\u1ebft qu\u1ea3'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF07E2B),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('L\u01b0u k\u1ebft qu\u1ea3'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           );
         },
       ),
     );
   }
 }
+

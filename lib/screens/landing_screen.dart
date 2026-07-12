@@ -10,10 +10,10 @@ import 'package:pet_care/screens/store_screen.dart';
 import 'package:pet_care/screens/cart_screen.dart';
 import 'package:pet_care/screens/purchase_history_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
+import 'package:pet_care/utils/responsive.dart';
 
 class LandingScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
-  
   const LandingScreen({super.key, this.user});
 
   @override
@@ -39,12 +39,12 @@ class _LandingScreenState extends State<LandingScreen> {
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.pets, color: Color(0xFFF07E2B), size: 28),
-            const SizedBox(width: 8),
+            Icon(Icons.pets, color: const Color(0xFFF07E2B), size: R.iconMd(context)),
+            const SizedBox(width: 6),
             RichText(
-              text: const TextSpan(
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                children: [
+              text: TextSpan(
+                style: TextStyle(fontSize: R.sp(context, 20), fontWeight: FontWeight.bold),
+                children: const [
                   TextSpan(text: 'Paw', style: TextStyle(color: Color(0xFF0F2E53))),
                   TextSpan(text: 'Rent', style: TextStyle(color: Color(0xFFF07E2B))),
                 ],
@@ -54,10 +54,9 @@ class _LandingScreenState extends State<LandingScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => StoreScreen(user: _currentUser)));
-            },
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreScreen(user: _currentUser))),
             icon: const Icon(Icons.storefront, color: Color(0xFF0F2E53)),
+            tooltip: 'Cửa hàng',
           ),
           IconButton(
             onPressed: () {
@@ -65,48 +64,57 @@ class _LandingScreenState extends State<LandingScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để xem giỏ hàng!')));
                 return;
               }
-              Navigator.push(context, MaterialPageRoute(builder: (context) => CartScreen(user: _currentUser!)));
+              Navigator.push(context, MaterialPageRoute(builder: (_) => CartScreen(user: _currentUser!)));
             },
             icon: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF0F2E53)),
+            tooltip: 'Giỏ hàng',
           ),
-          _currentUser != null 
-            ? Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: ClipOval(
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    color: Colors.grey[200],
-                    child: (_currentUser!['avatar'] != null && _currentUser!['avatar'].toString().trim().isNotEmpty && _currentUser!['avatar'].toString().startsWith('http'))
-                        ? Image.network(
-                            _currentUser!['avatar'],
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
-                          )
-                        : Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
+          _currentUser != null
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedIndex = 4),
+                    child: ClipOval(
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        color: Colors.grey[200],
+                        child: (_currentUser!['avatar'] != null &&
+                                _currentUser!['avatar'].toString().trim().isNotEmpty &&
+                                _currentUser!['avatar'].toString().startsWith('http'))
+                            ? Image.network(
+                                _currentUser!['avatar'],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
+                              )
+                            : Image.asset('assets/images/hero_pets.png', fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                )
+              : TextButton(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
+                  child: Text(
+                    'Đăng nhập',
+                    style: TextStyle(
+                      color: const Color(0xFF0F2E53),
+                      fontWeight: FontWeight.bold,
+                      fontSize: R.sp(context, 13),
+                    ),
                   ),
                 ),
-              )
-            : TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  );
-                },
-                child: const Text('Đăng nhập', style: TextStyle(color: Color(0xFF0F2E53), fontWeight: FontWeight.bold)),
-              ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (i) => setState(() => _selectedIndex = i),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFFF07E2B),
         unselectedItemColor: Colors.grey,
+        selectedLabelStyle: TextStyle(fontSize: R.sp(context, 11), fontWeight: FontWeight.w600),
+        unselectedLabelStyle: TextStyle(fontSize: R.sp(context, 11)),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
           BottomNavigationBarItem(icon: Icon(Icons.medical_services), label: 'Dịch vụ'),
@@ -119,40 +127,32 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildBody() {
-    if (_selectedIndex == 1) {
-      return ServicesScreen(user: _currentUser);
+    switch (_selectedIndex) {
+      case 1:
+        return ServicesScreen(user: _currentUser);
+      case 2:
+        return PetsScreen(user: _currentUser);
+      case 3:
+        return _currentUser != null
+            ? AppointmentsScreen(user: _currentUser!, isEmbedded: true)
+            : const Center(child: Text('Vui lòng đăng nhập để xem lịch khám'));
+      case 4:
+        return ProfileScreen(
+          user: _currentUser,
+          onUserUpdated: (u) => setState(() => _currentUser = u),
+        );
+      default:
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+              _buildHeroSection(),
+              _buildFeaturesSection(),
+              _buildDoctorsSection(),
+              const SizedBox(height: 40),
+            ],
+          ),
+        );
     }
-    if (_selectedIndex == 2) {
-      return PetsScreen(user: _currentUser);
-    }
-    if (_selectedIndex == 3) {
-      if (_currentUser != null) {
-        return AppointmentsScreen(user: _currentUser!, isEmbedded: true);
-      } else {
-        return const Center(child: Text('Vui lòng đăng nhập để xem lịch khám'));
-      }
-    }
-    if (_selectedIndex == 4) {
-      return ProfileScreen(
-        user: _currentUser,
-        onUserUpdated: (updatedUser) {
-          setState(() {
-            _currentUser = updatedUser;
-          });
-        },
-      );
-    }
-    
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHeroSection(),
-          _buildFeaturesSection(),
-          _buildDoctorsSection(),
-          const SizedBox(height: 40), // Bottom padding
-        ],
-      ),
-    );
   }
 
   Widget _buildHeroSection() {
@@ -162,31 +162,35 @@ class _LandingScreenState extends State<LandingScreen> {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFFFF9E6),
-            Color(0xFFFFD740),
-          ],
+          colors: [Color(0xFFFFF9E6), Color(0xFFFFD740)],
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+      padding: EdgeInsets.symmetric(
+        horizontal: R.hPad(context),
+        vertical: R.isSmall(context) ? 20 : 28,
+      ),
       child: Column(
         children: [
-          // Image on top for mobile
+          // Hero image — height responsive
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Image.asset(
               'assets/images/hero_pets.png',
               width: double.infinity,
-              height: 220,
+              height: R.heroHeight(context),
               fit: BoxFit.cover,
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: R.isSmall(context) ? 20 : 28),
           RichText(
             textAlign: TextAlign.center,
-            text: const TextSpan(
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, height: 1.3),
-              children: [
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: R.sp(context, 28),
+                fontWeight: FontWeight.w900,
+                height: 1.3,
+              ),
+              children: const [
                 TextSpan(text: 'An Toàn Cho ', style: TextStyle(color: Color(0xFF1F2937))),
                 TextSpan(text: '"Boss"\n', style: TextStyle(color: Color(0xFF0F2E53))),
                 TextSpan(text: 'An Tâm Cho ', style: TextStyle(color: Color(0xFF1F2937))),
@@ -194,40 +198,45 @@ class _LandingScreenState extends State<LandingScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Pawrent cung cấp dịch vụ chăm sóc thú cưng toàn diện với đội ngũ bác sĩ thú y chuyên nghiệp, 24/7 sẵn sàng đồng hành cùng thú cưng của bạn.',
+          const SizedBox(height: 12),
+          Text(
+            'PetCare cung cấp dịch vụ chăm sóc thú cưng toàn diện với đội ngũ bác sĩ thú y chuyên nghiệp, 24/7 sẵn sàng đồng hành.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: R.sp(context, 14),
               height: 1.5,
-              color: Color(0xFF4B5563),
+              color: const Color(0xFF4B5563),
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: R.isSmall(context) ? 20 : 28),
           ElevatedButton.icon(
             onPressed: () {
               if (_currentUser == null) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để đặt lịch hẹn!')));
                 return;
               }
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => BookingScreen(user: _currentUser!)),
-              );
+              Navigator.push(context, MaterialPageRoute(builder: (_) => BookingScreen(user: _currentUser!)));
             },
-            icon: const Icon(Icons.access_time, size: 20, color: Color(0xFF0F2E53)),
-            label: const Text('Đặt lịch hẹn ngay', style: TextStyle(color: Color(0xFF0F2E53), fontSize: 16, fontWeight: FontWeight.bold)),
+            icon: Icon(Icons.access_time, size: R.iconSm(context), color: const Color(0xFF0F2E53)),
+            label: Text(
+              'Đặt lịch hẹn ngay',
+              style: TextStyle(
+                color: const Color(0xFF0F2E53),
+                fontSize: R.sp(context, 15),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFFE566),
               elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+              padding: EdgeInsets.symmetric(
+                horizontal: R.isSmall(context) ? 20 : 28,
+                vertical: R.isSmall(context) ? 12 : 15,
               ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -241,62 +250,80 @@ class _LandingScreenState extends State<LandingScreen> {
       {'icon': Icons.storefront, 'title': 'Cửa hàng thú cưng', 'color': Colors.pink},
     ];
 
+    final boxSize = R.isSmall(context) ? 58.0 : 65.0;
+    final textWidth = R.isSmall(context) ? 72.0 : 82.0;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20.0),
+      padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 14 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20.0),
-            child: Text('Dịch Vụ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: R.hPad(context)),
+            child: Text(
+              'Dịch Vụ',
+              style: TextStyle(
+                fontSize: R.sp(context, 18),
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF0F2E53),
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            padding: EdgeInsets.symmetric(horizontal: R.hPad(context) - 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: features.map((f) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: GestureDetector(
-                  onTap: () {
-                    if (f['title'] == 'Cửa hàng thú cưng') {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => StoreScreen(user: _currentUser)));
-                    } else if (f['title'] == 'Dịch vụ thú cưng') {
-                      setState(() => _selectedIndex = 1);
-                    } else if (f['title'] == 'Đặt lịch khám') {
-                      if (_currentUser != null) {
-                        setState(() => _selectedIndex = 3);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để xem lịch khám')));
+              children: features.map((f) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      final title = f['title'] as String;
+                      if (title == 'Cửa hàng thú cưng') {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => StoreScreen(user: _currentUser)));
+                      } else if (title == 'Dịch vụ thú cưng') {
+                        setState(() => _selectedIndex = 1);
+                      } else if (title == 'Đặt lịch khám') {
+                        if (_currentUser != null) {
+                          setState(() => _selectedIndex = 3);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để xem lịch khám')));
+                        }
                       }
-                    }
-                  },
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 65, height: 65,
-                        decoration: BoxDecoration(
-                          color: (f['color'] as Color).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
+                    },
+                    child: Column(
+                      children: [
+                        Container(
+                          width: boxSize,
+                          height: boxSize,
+                          decoration: BoxDecoration(
+                            color: (f['color'] as Color).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Icon(f['icon'] as IconData, color: f['color'] as Color, size: R.isSmall(context) ? 28 : 32),
                         ),
-                        child: Icon(f['icon'] as IconData, color: f['color'] as Color, size: 32),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: 80,
-                        child: Text(
-                          f['title'] as String, 
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563)),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: textWidth,
+                          child: Text(
+                            f['title'] as String,
+                            style: TextStyle(
+                              fontSize: R.sp(context, 11.5),
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF4B5563),
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              )).toList(),
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -306,9 +333,9 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _buildDoctorsSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 16),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(R.isSmall(context) ? 14 : 18),
         decoration: BoxDecoration(
           color: const Color(0xFFFFF9E6),
           borderRadius: BorderRadius.circular(16),
@@ -317,32 +344,38 @@ class _LandingScreenState extends State<LandingScreen> {
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(R.isSmall(context) ? 10 : 12),
               decoration: const BoxDecoration(
                 color: Color(0xFFF07E2B),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.medical_services, color: Colors.white, size: 30),
+              child: Icon(Icons.medical_services, color: Colors.white, size: R.isSmall(context) ? 24 : 28),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Đội Ngũ Bác Sĩ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
-                  SizedBox(height: 4),
-                  Text('Xem danh sách các chuyên gia thú y hàng đầu', style: TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
+                children: [
+                  Text(
+                    'Đội Ngũ Bác Sĩ',
+                    style: TextStyle(
+                      fontSize: R.sp(context, 16),
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF0F2E53),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Chuyên gia thú y hàng đầu',
+                    style: TextStyle(fontSize: R.sp(context, 12), color: const Color(0xFF4B5563)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.arrow_forward_ios, color: Color(0xFFF07E2B)),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => VetsScreen(user: _currentUser)),
-                );
-              },
+              icon: const Icon(Icons.arrow_forward_ios, color: Color(0xFFF07E2B), size: 18),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VetsScreen(user: _currentUser))),
             ),
           ],
         ),

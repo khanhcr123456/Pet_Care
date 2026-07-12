@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/screens/booking_screen.dart';
+import 'package:pet_care/utils/responsive.dart';
+import 'package:shimmer/shimmer.dart';
 
 class ServicesScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -52,26 +54,41 @@ class _ServicesScreenState extends State<ServicesScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)));
+      return ListView.builder(
+        padding: EdgeInsets.all(R.hPad(context) + 4),
+        itemCount: 4,
+        itemBuilder: (_, __) => Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade50,
+          child: Container(
+            margin: EdgeInsets.only(bottom: R.isSmall(context) ? 16 : 20),
+            height: 250,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      );
     }
 
     if (_services.isEmpty) {
-      return const Center(child: Text('Không có dịch vụ nào', style: TextStyle(fontSize: 16, color: Colors.grey)));
+      return Center(child: Text('Không có dịch vụ nào', style: TextStyle(fontSize: R.sp(context, 16), color: Colors.grey)));
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(20),
-      itemCount: _services.length + 1, // +1 for the header
+      padding: EdgeInsets.all(R.hPad(context) + 4),
+      itemCount: _services.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return const Padding(
-            padding: EdgeInsets.only(bottom: 24.0, top: 10.0),
+          return Padding(
+            padding: EdgeInsets.only(bottom: R.isSmall(context) ? 16 : 24, top: 10),
             child: Text(
-              'Các Dịch Vụ Của PawRent',
+              'Các Dịch Vụ Của PetCare',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: R.sp(context, 22),
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF0F2E53),
+                color: const Color(0xFF0F2E53),
               ),
             ),
           );
@@ -80,9 +97,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
         final service = _services[index - 1];
         final images = service['images'] as List<dynamic>?;
         final imageUrl = (images != null && images.isNotEmpty) ? images[0].toString() : null;
+        final imgHeight = R.heroHeight(context);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 20),
+          margin: EdgeInsets.only(bottom: R.isSmall(context) ? 16 : 20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -118,11 +136,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                     child: Image.network(
                       imageUrl,
-                      height: 180,
+                      height: imgHeight,
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stack) => Container(
-                        height: 180,
+                        height: imgHeight,
                         width: double.infinity,
                         color: Colors.grey[200],
                         child: const Icon(Icons.image_not_supported, color: Colors.grey, size: 50),
@@ -131,7 +149,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   )
                 else
                   Container(
-                    height: 180,
+                    height: imgHeight,
                     width: double.infinity,
                     decoration: const BoxDecoration(
                       color: Color(0xFFFFF9E6),
@@ -140,7 +158,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     child: const Icon(Icons.medical_services_outlined, color: Color(0xFFFFD740), size: 60),
                   ),
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: EdgeInsets.all(R.hPad(context)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -151,10 +169,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
                           Expanded(
                             child: Text(
                               service['name'] ?? 'Dịch vụ chưa cập nhật',
-                              style: const TextStyle(
-                                fontSize: 18,
+                              style: TextStyle(
+                                fontSize: R.sp(context, 17),
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F2E53),
+                                color: const Color(0xFF0F2E53),
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -169,40 +187,40 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             ),
                             child: Text(
                               formatCurrency(service['price'] ?? 0),
-                              style: const TextStyle(
-                                fontSize: 14,
+                              style: TextStyle(
+                                fontSize: R.sp(context, 13),
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F2E53),
+                                color: const Color(0xFF0F2E53),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: R.isSmall(context) ? 8 : 12),
                       Text(
                         service['description'] ?? 'Mô tả dịch vụ đang được cập nhật...',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF4B5563),
+                        style: TextStyle(
+                          fontSize: R.sp(context, 13),
+                          color: const Color(0xFF4B5563),
                           height: 1.5,
                         ),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: R.isSmall(context) ? 10 : 16),
                       const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                      const SizedBox(height: 12),
+                      SizedBox(height: R.isSmall(context) ? 8 : 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.star, color: Colors.orange, size: 18),
+                              Icon(Icons.star, color: Colors.orange, size: R.iconSm(context)),
                               const SizedBox(width: 4),
                               Text(
                                 service['type'] == 'vaccination' ? 'Tiêm phòng' : 'Khám chữa bệnh',
-                                style: const TextStyle(
-                                  fontSize: 13,
+                                style: TextStyle(
+                                  fontSize: R.sp(context, 12),
                                   fontWeight: FontWeight.w600,
                                   color: Colors.orange,
                                 ),
@@ -210,21 +228,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             ],
                           ),
                           Row(
-                            children: const [
+                            children: [
                               Text(
                                 'Đặt lịch ngay',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: R.sp(context, 13),
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0F2E53),
+                                  color: const Color(0xFF0F2E53),
                                 ),
                               ),
-                              SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 14,
-                                color: Color(0xFF0F2E53),
-                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_forward_ios, size: 13, color: Color(0xFF0F2E53)),
                             ],
                           ),
                         ],

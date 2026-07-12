@@ -36,12 +36,12 @@ class InvoiceService {
 
   Future<void> updateInvoiceStatus(String token, String invoiceId, String status) async {
     final response = await http.patch(
-      Uri.parse('${AppConfig.baseUrl}/invoices/$invoiceId/status'),
+      Uri.parse('${AppConfig.baseUrl}/invoices/$invoiceId/order-status'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: json.encode({'status': status}),
+      body: json.encode({'orderStatus': status}),
     );
 
     if (response.statusCode != 200 && response.statusCode != 201) {

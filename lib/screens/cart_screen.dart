@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pet_care/services/product_service.dart';
-import 'package:pet_care/screens/store_screen.dart';
 import 'package:pet_care/screens/checkout_screen.dart';
+import 'package:pet_care/screens/store_screen.dart';
 import 'package:pet_care/utils/responsive.dart';
 
 class CartScreen extends StatefulWidget {
@@ -166,9 +166,12 @@ class _CartScreenState extends State<CartScreen> {
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.pushReplacement(
+                          // Quay về màn hình gốc (Landing) để xóa Store cũ (nếu có),
+                          // Sau đó mới Push trang Store mới lên.
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+                          Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => StoreScreen(user: widget.user)),
+                            MaterialPageRoute(builder: (_) => StoreScreen(user: widget.user)),
                           );
                         },
                         style: ElevatedButton.styleFrom(

@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:pet_care/config/app_config.dart';
 
 class InvoiceService {
-  Future<void> createProductInvoice(String token, Map<String, dynamic> invoiceData) async {
+  Future<Map<String, dynamic>> createProductInvoice(String token, Map<String, dynamic> invoiceData) async {
     final response = await http.post(
       Uri.parse('${AppConfig.baseUrl}/invoices/products'),
       headers: {
@@ -16,6 +16,40 @@ class InvoiceService {
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Failed to create invoice: ${response.body}');
     }
+    
+    try {
+      if (response.body.isNotEmpty) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {};
+  }
+
+  Future<Map<String, dynamic>> initSepayCheckout(String token, String invoiceId) async {
+    final response = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/payments/sepay/checkout/init'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: json.encode({
+        'invoiceId': invoiceId,
+        'successUrl': 'https://petcare.app.vn/payment/success',
+        'errorUrl': 'https://petcare.app.vn/payment/error',
+        'cancelUrl': 'https://petcare.app.vn/payment/cancel',
+      }),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Lỗi tạo mã QR thanh toán: ${response.body}');
+    }
+    
+    try {
+      if (response.body.isNotEmpty) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {};
   }
 
   Future<List<dynamic>> getInvoices(String token, {int page = 1, int limit = 20}) async {

@@ -78,6 +78,25 @@ class AuthService {
     }
   }
 
+  Future<AuthSession> googleLogin({required String idToken}) async {
+    final response = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/auth/google'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'idToken': idToken}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Google login failed: ${response.body}');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid Google login response.');
+    }
+
+    return AuthSession.fromLoginPayload(decoded);
+  }
+
   Future<List<dynamic>> getVets({int page = 1, int limit = 20}) async {
     final response = await http.get(Uri.parse('${AppConfig.baseUrl}/auth/vets?page=$page&limit=$limit'));
     if (response.statusCode == 200) {
@@ -114,7 +133,12 @@ class AuthService {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to update profile: ${response.body}');
+        String errorMsg = 'Cập nhật thất bại';
+        try {
+          final errData = jsonDecode(response.body);
+          if (errData['message'] != null) errorMsg = errData['message'];
+        } catch (_) {}
+        throw Exception(errorMsg);
       }
 
       final decoded = jsonDecode(response.body);
@@ -131,7 +155,12 @@ class AuthService {
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to update profile: ${response.body}');
+        String errorMsg = 'Cập nhật thất bại';
+        try {
+          final errData = jsonDecode(response.body);
+          if (errData['message'] != null) errorMsg = errData['message'];
+        } catch (_) {}
+        throw Exception(errorMsg);
       }
 
       final decoded = jsonDecode(response.body);

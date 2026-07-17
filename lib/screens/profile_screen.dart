@@ -123,6 +123,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (_user == null || _user!['token'] == null) return;
+
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final address = _addressController.text.trim();
+
+    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ!', style: TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -130,10 +146,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final updatedData = await authService.updateProfile(
         _user!['token'],
         {
-          'name': _nameController.text.trim(),
-          'fullName': _nameController.text.trim(),
-          'phone': _phoneController.text.trim(),
-          'address': _addressController.text.trim(),
+          'name': name,
+          'fullName': name,
+          'phone': phone,
+          'address': address,
         },
       );
       
@@ -152,8 +168,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      final errorMsg = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi cập nhật: $e')),
+        SnackBar(
+          content: Text(
+            errorMsg, 
+            style: const TextStyle(fontWeight: FontWeight.bold)
+          ),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } finally {
       if (mounted) {
@@ -431,8 +455,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          if (!isEditable)
-            const Icon(Icons.chevron_right, color: Color(0xFFD1D5DB)),
         ],
       ),
     );

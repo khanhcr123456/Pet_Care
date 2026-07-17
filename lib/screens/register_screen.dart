@@ -113,7 +113,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _nameController,
                             textCapitalization: TextCapitalization.words,
                             decoration: _inputDecoration('Họ và tên', Icons.person_outline),
-                            validator: (v) => (v == null || v.isEmpty) ? 'Nhập họ và tên' : null,
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập họ và tên' : null,
                           ),
                           const SizedBox(height: 13),
 
@@ -122,7 +122,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: _inputDecoration('Email', Icons.email_outlined),
-                            validator: (v) => (v == null || v.isEmpty) ? 'Nhập email' : null,
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) return 'Nhập email';
+                              if (v.contains(' ')) return 'Email không hợp lệ';
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 13),
 
@@ -138,7 +142,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             validator: (v) {
-                              if (v == null || v.isEmpty) return 'Nhập mật khẩu';
+                              if (v == null || v.trim().isEmpty) return 'Nhập mật khẩu';
+                              if (v.contains(' ')) return 'Mật khẩu không được chứa khoảng trắng';
                               if (v.length < 6) return 'Tối thiểu 6 ký tự';
                               return null;
                             },
@@ -157,7 +162,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             validator: (v) {
-                              if (v == null || v.isEmpty) return 'Nhập lại mật khẩu';
+                              if (v == null || v.trim().isEmpty) return 'Nhập lại mật khẩu';
                               if (v != _passwordController.text) return 'Mật khẩu không khớp';
                               return null;
                             },

@@ -14,6 +14,10 @@ class StoreScreen extends StatefulWidget {
 
 class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin {
   final ProductService _productService = ProductService();
+
+  // ── Cache tĩnh: giữ sản phẩm giữa các lần navigate ──
+  static List<dynamic>? _cachedProducts;
+
   List<dynamic> _products = [];
   bool _isLoading = true;
   final Set<String> _addingToCart = {};
@@ -26,8 +30,28 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _fetchProducts();
-    _fetchCartCount();
+    _initialLoad();
+  }
+
+  /// Load song song products + cart, dùng cache nếu có
+  Future<void> _initialLoad() async {
+    // Nếu có cache: hiện ngay, rồi refresh ngầm
+    if (_cachedProducts != null && _cachedProducts!.isNotEmpty) {
+      setState(() {
+        _products = _cachedProducts!;
+        _isLoading = false;
+      });
+      // Refresh ngầm không block UI
+      _fetchProducts(silent: true);
+      _fetchCartCount();
+      return;
+    }
+
+    // Chưa có cache: fetch song song cả 2
+    await Future.wait([
+      _fetchProducts(),
+      _fetchCartCount(),
+    ]);
   }
 
   Future<void> _fetchCartCount() async {
@@ -52,9 +76,13 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
     }
   }
 
-  Future<void> _fetchProducts() async {
+  Future<void> _fetchProducts({bool silent = false}) async {
     try {
-      final products = await _productService.getProducts();
+      final products = await _productService
+          .getProducts()
+          .timeout(const Duration(seconds: 10));
+      // Cập nhật cache
+      _cachedProducts = products;
       if (mounted) {
         setState(() {
           _products = products;
@@ -62,7 +90,7 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !silent) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Không thể tải danh sách sản phẩm.')),

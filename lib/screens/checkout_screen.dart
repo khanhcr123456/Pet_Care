@@ -21,7 +21,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  String _selectedPaymentMethod = 'COD';
+  String _selectedPaymentMethod = 'cod';
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
@@ -85,7 +85,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }).toList(),
       };
 
-      await InvoiceService().createProductInvoice(widget.user['token'], invoiceData);
+      final invoiceRes = await InvoiceService().createProductInvoice(widget.user['token'], invoiceData);
 
       // Remove ordered items from cart
       for (var item in widget.selectedItems) {
@@ -102,6 +102,59 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (mounted) {
       setState(() => _isProcessing = false);
+      
+      if (_selectedPaymentMethod == 'bank') {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 60),
+                const SizedBox(height: 16),
+                Text('Đặt hàng thành công!', style: TextStyle(fontSize: R.sp(context, 19), fontWeight: FontWeight.bold, color: const Color(0xFF0F2E53))),
+                const SizedBox(height: 8),
+                Text('Vui lòng thanh toán đơn hàng này để shop có thể đối soát và lên đơn cho bạn nhé.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 13))),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => PurchaseHistoryScreen(user: widget.user)));
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF07E2B),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text('THANH TOÁN TẠI ĐÂY', style: TextStyle(fontSize: R.sp(context, 14))),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0F2E53),
+                      side: const BorderSide(color: Color(0xFF0F2E53)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: Text('ĐỂ SAU', style: TextStyle(fontSize: R.sp(context, 14))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        return;
+      }
+
       
       showDialog(
         context: context,
@@ -155,13 +208,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       );
     }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: ${e.toString().replaceAll('Exception: ', '')}')));
-      }
+  } catch (e) {
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: ${e.toString().replaceAll('Exception: ', '')}')));
     }
   }
+}
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +284,91 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ],
               ),
+            ),
+            SizedBox(height: R.isSmall(context) ? 18 : 24),
+
+            // Phương thức thanh toán
+            Text('Phương thức thanh toán',
+                style: TextStyle(fontSize: R.sp(context, 17), fontWeight: FontWeight.bold, color: const Color(0xFF0F2E53))),
+            SizedBox(height: R.isSmall(context) ? 8 : 12),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedPaymentMethod = 'cod'),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: _selectedPaymentMethod == 'cod'
+                            ? const Color(0xFF0F2E53).withOpacity(0.08)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _selectedPaymentMethod == 'cod'
+                              ? const Color(0xFF0F2E53)
+                              : Colors.grey.shade300,
+                          width: _selectedPaymentMethod == 'cod' ? 2 : 1,
+                        ),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.local_shipping_outlined,
+                              color: _selectedPaymentMethod == 'cod' ? const Color(0xFF0F2E53) : Colors.grey,
+                              size: 28),
+                          const SizedBox(height: 6),
+                          Text('Thanh toán\nkhi nhận hàng',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: R.sp(context, 12),
+                                fontWeight: _selectedPaymentMethod == 'cod' ? FontWeight.bold : FontWeight.normal,
+                                color: _selectedPaymentMethod == 'cod' ? const Color(0xFF0F2E53) : Colors.grey,
+                              )),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedPaymentMethod = 'bank'),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: _selectedPaymentMethod == 'bank'
+                            ? const Color(0xFFF07E2B).withOpacity(0.08)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _selectedPaymentMethod == 'bank'
+                              ? const Color(0xFFF07E2B)
+                              : Colors.grey.shade300,
+                          width: _selectedPaymentMethod == 'bank' ? 2 : 1,
+                        ),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.account_balance_outlined,
+                              color: _selectedPaymentMethod == 'bank' ? const Color(0xFFF07E2B) : Colors.grey,
+                              size: 28),
+                          const SizedBox(height: 6),
+                          Text('Chuyển khoản\nngân hàng',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: R.sp(context, 12),
+                                fontWeight: _selectedPaymentMethod == 'bank' ? FontWeight.bold : FontWeight.normal,
+                                color: _selectedPaymentMethod == 'bank' ? const Color(0xFFF07E2B) : Colors.grey,
+                              )),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             SizedBox(height: R.isSmall(context) ? 18 : 24),
 

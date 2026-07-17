@@ -127,8 +127,28 @@ class _BookingScreenState extends State<BookingScreen> {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate!);
       final slots = await BookingService().getAvailableSlots(widget.user['token'], _selectedVetId!, dateStr);
       if (mounted) {
+        final now = DateTime.now();
+        final isToday = _selectedDate!.year == now.year &&
+            _selectedDate!.month == now.month &&
+            _selectedDate!.day == now.day;
+            
+        final filteredSlots = slots.where((slot) {
+          if (!isToday) return true;
+          final startTime = slot['startTime'];
+          if (startTime == null) return true;
+          
+          final parts = startTime.split(':');
+          if (parts.length != 2) return true;
+          
+          final hour = int.tryParse(parts[0]) ?? 0;
+          final minute = int.tryParse(parts[1]) ?? 0;
+          
+          final slotDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+          return slotDateTime.isAfter(now);
+        }).toList();
+
         setState(() {
-          _timeSlots = slots;
+          _timeSlots = filteredSlots;
           _isLoadingSlots = false;
           if (_selectedTimeSlot != null && !_timeSlots.any((s) => s['startTime'] == _selectedTimeSlot!['startTime'])) {
             _selectedTimeSlot = null;

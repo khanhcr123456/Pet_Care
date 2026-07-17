@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pet_care/screens/landing_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:pet_care/screens/register_screen.dart';
@@ -20,9 +21,23 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // clientId: Mã Client ID tĩnh của Android 
+    clientId: '888854265843-klrcdc77tq9rlnrv4hv3vu9n0ajvuu3c.apps.googleusercontent.com',
+    // serverClientId: Mã Client ID của Web (dành cho API)
+    serverClientId: '888854265843-5f9b8mqjufksrvrflph18sncg13tth81.apps.googleusercontent.com',
+  );
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-warm: signOut ngay khi màn hình hiện — sẵn sàng cho lần nhấn nút
+    _googleSignIn.signOut().ignore();
+  }
 
   @override
   void dispose() {
@@ -40,19 +55,19 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      final userInfo = await _authService.getMe(session.token);
-      userInfo['token'] = session.token;
+      // Dùng trực tiếp userInfo từ login response — không cần gọi getMe() nữa
+      final userInfo = session.userInfo;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('userInfo', jsonEncode(userInfo));
 
       if (!mounted) return;
-      if (userInfo['role'] == 'admin') {
+      if (session.role == 'admin') {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => AdminDashboardScreen(user: userInfo)),
           (route) => false,
         );
-      } else if (userInfo['role'] == 'vet') {
+      } else if (session.role == 'vet') {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => VetDashboardScreen(user: userInfo)),
           (route) => false,
@@ -85,6 +100,97 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+
+  Future<void> _signInWithGoogle() async {
+    setState(() { _isGoogleLoading = true; _errorMessage = null; });
+    try {
+      debugPrint('[GoogleLogin] Bắt đầu đăng nhập Google...');
+      // signOut đã pre-warm trong initState, gọi lại để đảm bảo nếu cần
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        debugPrint('[GoogleLogin] Người dùng huỷ.');
+        setState(() => _isGoogleLoading = false);
+        return;
+      }
+      debugPrint('[GoogleLogin] Google user: ${googleUser.email}');
+
+      // Song song: lấy authentication và khởi tạo SharedPreferences cùng lúc
+      final results = await Future.wait([
+        googleUser.authentication,
+        SharedPreferences.getInstance(),
+      ]);
+      final googleAuth = results[0] as GoogleSignInAuthentication;
+      final prefs = results[1] as SharedPreferences;
+
+      final idToken = googleAuth.idToken;
+      debugPrint('[GoogleLogin] idToken: ${idToken == null ? "NULL \u274c" : "${idToken.substring(0, 30)}... \u2705"}');
+
+      if (idToken == null) {
+        throw Exception('Không lấy được ID token. Kiểm tra serverClientId và Android OAuth Client.');
+      }
+
+      debugPrint('[GoogleLogin] Gửi idToken lên backend...');
+      final session = await _authService.googleLogin(idToken: idToken);
+      debugPrint('[GoogleLogin] Backend trả về token OK. Role: ${session.role}');
+
+      final userInfo = session.userInfo;
+      debugPrint('[GoogleLogin] userInfo: $userInfo');
+
+      await prefs.setString('userInfo', jsonEncode(userInfo));
+
+      if (!mounted) return;
+      if (userInfo['role'] == 'admin') {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => AdminDashboardScreen(user: userInfo)),
+          (route) => false,
+        );
+      } else if (userInfo['role'] == 'vet') {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => VetDashboardScreen(user: userInfo)),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => LandingScreen(user: userInfo)),
+          (route) => false,
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('══════════════════════════════════════');
+      debugPrint('[GoogleLogin ERROR] $error');
+      debugPrint('[StackTrace]\n$stackTrace');
+      debugPrint('══════════════════════════════════════');
+
+      if (!mounted) return;
+      final errorMsg = error.toString().replaceFirst('Exception: ', '');
+      setState(() => _errorMessage = errorMsg);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  errorMsg,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
     }
   }
 
@@ -157,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderSide: const BorderSide(color: Color(0xFFF07E2B), width: 2),
                               ),
                             ),
-                            validator: (v) => (v == null || v.isEmpty) ? 'Nhập email' : null,
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập email' : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -176,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderSide: const BorderSide(color: Color(0xFFF07E2B), width: 2),
                               ),
                             ),
-                            validator: (v) => (v == null || v.isEmpty) ? 'Nhập mật khẩu' : null,
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập mật khẩu' : null,
                           ),
                           SizedBox(height: R.isSmall(context) ? 18 : 24),
                           ElevatedButton(
@@ -196,6 +302,61 @@ class _LoginScreenState extends State<LoginScreen> {
                                       fontSize: R.sp(context, 15),
                                       fontWeight: FontWeight.bold,
                                     ),
+                                  ),
+                          ),
+                          const SizedBox(height: 16),
+                          // ── Divider "Hoặc" ──
+                          Row(
+                            children: [
+                              const Expanded(child: Divider(thickness: 1)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  'Hoặc',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: R.sp(context, 13),
+                                  ),
+                                ),
+                              ),
+                              const Expanded(child: Divider(thickness: 1)),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          // ── Google Login Button ──
+                          OutlinedButton(
+                            onPressed: (_isLoading || _isGoogleLoading) ? null : _signInWithGoogle,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              side: const BorderSide(color: Color(0xFFDDDDDD), width: 1.5),
+                              backgroundColor: Colors.white,
+                            ),
+                            child: _isGoogleLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4285F4)),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Image.network(
+                                        'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                                        height: 22,
+                                        width: 22,
+                                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 22, color: Color(0xFF4285F4)),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Đăng nhập bằng Google',
+                                        style: TextStyle(
+                                          color: const Color(0xFF3C4043),
+                                          fontSize: R.sp(context, 14),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                           ),
                           if (_errorMessage != null) ...[

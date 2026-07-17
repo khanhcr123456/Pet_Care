@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:pet_care/services/invoice_service.dart';
 import 'package:pet_care/services/product_service.dart';
 import 'package:pet_care/utils/responsive.dart';
@@ -159,6 +160,16 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                     final orderId = invoice['_id'] ?? invoice['id'] ?? '';
                     final shortOrderId = orderId.toString().length > 8 ? orderId.toString().substring(0, 8).toUpperCase() : orderId.toString().toUpperCase();
                     
+                    final rawPaymentMethod = invoice['paymentMethod']?.toString().toLowerCase();
+                    String paymentMethodText = 'Thanh toán trực tiếp'; // Mặc định nếu API không trả về
+                    if (rawPaymentMethod == 'cod') {
+                      paymentMethodText = 'Thanh toán khi nhận hàng';
+                    } else if (rawPaymentMethod == 'bank') {
+                      paymentMethodText = 'Chuyển khoản';
+                    } else if (rawPaymentMethod != null && rawPaymentMethod.isNotEmpty) {
+                      paymentMethodText = invoice['paymentMethod'].toString();
+                    }
+                    
                     final total = invoice['total'] ?? invoice['totalAmount'] ?? 0;
                     final allItems = [
                       ...(invoice['items'] ?? []),
@@ -206,6 +217,8 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                             SizedBox(height: R.isSmall(context) ? 8 : 12),
                             Text('Đơn hàng: #$shortOrderId', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14), color: const Color(0xFF0F2E53))),
                             const SizedBox(height: 6),
+                            Text('Thanh toán: $paymentMethodText', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
+                            const SizedBox(height: 4),
                             Text('Địa chỉ: $address', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
                             SizedBox(height: R.isSmall(context) ? 8 : 12),
                             const Divider(height: 1, color: Color(0xFFEEEEEE)),
@@ -293,6 +306,66 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                                 Text('Số tiền: ${formatCurrency(total)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 15), color: const Color(0xFFF07E2B))),
                                 Row(
                                   children: [
+                                    if (status == 'pending' && rawPaymentMethod == 'bank')
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: SizedBox(
+                                          height: 30,
+                                          child: ElevatedButton(
+                                            onPressed: () async {
+                                              if (!mounted) return;
+                                              showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+                                              try {
+                                                final invoiceIdObj = invoice['_id'] ?? invoice['id'];
+                                                final invoiceId = invoiceIdObj?.toString() ?? '';
+                                                final res = await InvoiceService().initSepayCheckout(widget.user['token'], invoiceId);
+                                                if (!mounted) return;
+                                                Navigator.pop(context); // close loading
+                                                
+                                                final resData = (res['data'] is Map) ? res['data'] : {};
+                                                String? paymentUrl = res['checkoutPageUrl'] ?? res['url'] ?? resData['checkoutPageUrl'] ?? resData['url'];
+                                                
+                                                if (paymentUrl != null && paymentUrl.isNotEmpty) {
+                                                   final result = await Navigator.push(
+                                                     context,
+                                                     MaterialPageRoute(
+                                                       builder: (context) => Scaffold(
+                                                         appBar: AppBar(
+                                                           title: const Text('Cổng thanh toán', style: TextStyle(color: Colors.white)),
+                                                           backgroundColor: const Color(0xFF0F2E53),
+                                                           leading: IconButton(
+                                                             icon: const Icon(Icons.close, color: Colors.white),
+                                                             onPressed: () => Navigator.pop(context),
+                                                           ),
+                                                         ),
+                                                         body: _WebViewLoader(url: paymentUrl),
+                                                       ),
+                                                     )
+                                                   );
+                                                   if (result == true && mounted) {
+                                                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Giao dịch đã kết thúc, đang tải lại trạng thái đơn hàng...')));
+                                                     setState(() => _isLoading = true);
+                                                     _fetchInvoices();
+                                                   }
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy link thanh toán (checkoutPageUrl)')));
+                                                }
+                                              } catch (e) {
+                                                if (!mounted) return;
+                                                Navigator.pop(context);
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi tải thanh toán: ${e.toString().replaceAll('Exception: ', '')}')));
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF0F2E53),
+                                              foregroundColor: Colors.white,
+                                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                            ),
+                                            child: Text('Thanh toán', style: TextStyle(fontSize: R.sp(context, 11))),
+                                          ),
+                                        ),
+                                      ),
 
                                     if (status == 'pending')
                                       SizedBox(
@@ -348,5 +421,40 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                   },
                 ),
     );
+  }
+}
+
+class _WebViewLoader extends StatefulWidget {
+  final String url;
+  const _WebViewLoader({required this.url});
+  @override
+  State<_WebViewLoader> createState() => _WebViewLoaderState();
+}
+
+class _WebViewLoaderState extends State<_WebViewLoader> {
+  late final WebViewController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            if (request.url.startsWith('https://petcare.app.vn/payment/')) {
+              Navigator.pop(context, true);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.url));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WebViewWidget(controller: controller);
   }
 }

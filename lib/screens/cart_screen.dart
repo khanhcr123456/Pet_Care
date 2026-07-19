@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:pet_care/services/product_service.dart';
-import 'package:pet_care/screens/store_screen.dart';
 import 'package:pet_care/screens/checkout_screen.dart';
+import 'package:pet_care/screens/store_screen.dart';
+import 'package:pet_care/utils/responsive.dart';
 
 class CartScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -44,7 +45,6 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _updateQuantity(String productId, int newQuantity) async {
     if (newQuantity < 1) return;
     
-    // Optimistic UI update
     int oldQuantity = 1;
     final index = _cartItems?.indexWhere((item) => item['product']?['_id'] == productId);
     if (index != null && index >= 0) {
@@ -59,7 +59,6 @@ class _CartScreenState extends State<CartScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không thể cập nhật: $e')));
-        // Revert optimistic update
         if (index != null && index >= 0) {
           setState(() {
             _cartItems![index]['quantity'] = oldQuantity;
@@ -74,8 +73,8 @@ class _CartScreenState extends State<CartScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Xác nhận', style: TextStyle(color: Color(0xFF0F2E53), fontWeight: FontWeight.bold)),
-          content: const Text('Bạn có chắc chắn muốn xóa sản phẩm này khỏi giỏ hàng?'),
+          title: Text('Xác nhận', style: TextStyle(color: const Color(0xFF0F2E53), fontWeight: FontWeight.bold, fontSize: R.sp(context, 16))),
+          content: Text('Bạn có chắc chắn muốn xóa sản phẩm này khỏi giỏ hàng?', style: TextStyle(fontSize: R.sp(context, 13))),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           actions: <Widget>[
             TextButton(
@@ -130,6 +129,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     final items = _cartItems ?? [];
+    final imgSize = R.isSmall(context) ? 70.0 : 80.0;
     num total = 0;
     
     final selectedCartItems = items.where((item) {
@@ -147,7 +147,10 @@ class _CartScreenState extends State<CartScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6FAFD),
       appBar: AppBar(
-        title: const Text('Giỏ hàng', style: TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+        title: Text(
+          'Giỏ hàng',
+          style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 18)),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFFF07E2B),
         elevation: 0,
@@ -159,22 +162,25 @@ class _CartScreenState extends State<CartScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('Giỏ hàng đang trống.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                      Text('Giỏ hàng đang trống.', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 15))),
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: () {
-                          Navigator.pushReplacement(
+                          // Quay về màn hình gốc (Landing) để xóa Store cũ (nếu có),
+                          // Sau đó mới Push trang Store mới lên.
+                          Navigator.of(context).popUntil((route) => route.isFirst);
+                          Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => StoreScreen(user: widget.user)),
+                            MaterialPageRoute(builder: (_) => StoreScreen(user: widget.user)),
                           );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F2E53),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: EdgeInsets.symmetric(horizontal: R.isSmall(context) ? 18 : 24, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('ĐI ĐẾN CỬA HÀNG', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: Text('ĐI ĐẾN CỬA HÀNG', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
                       ),
                     ],
                   ),
@@ -183,7 +189,7 @@ class _CartScreenState extends State<CartScreen> {
                   children: [
                     Expanded(
                       child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(R.hPad(context)),
                         itemCount: items.length,
                         itemBuilder: (context, index) {
                           final item = items[index];
@@ -195,14 +201,15 @@ class _CartScreenState extends State<CartScreen> {
                           final productId = product['_id'] as String?;
 
                           return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(12),
+                            margin: EdgeInsets.only(bottom: R.isSmall(context) ? 12 : 16),
+                            padding: EdgeInsets.all(R.isSmall(context) ? 10 : 12),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                             ),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Checkbox(
                                   value: productId != null && _selectedItems.contains(productId),
@@ -223,21 +230,50 @@ class _CartScreenState extends State<CartScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: imageUrl != null
-                                      ? Image.network(imageUrl, width: 80, height: 80, fit: BoxFit.cover)
-                                      : Container(width: 80, height: 80, color: Colors.grey[200], child: const Icon(Icons.image, color: Colors.grey)),
+                                      ? Image.network(imageUrl, width: imgSize, height: imgSize, fit: BoxFit.cover)
+                                      : Container(width: imgSize, height: imgSize, color: Colors.grey[200], child: const Icon(Icons.image, color: Colors.grey)),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(product['name'] ?? 'Sản phẩm', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2E53)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              product['name'] ?? 'Sản phẩm',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14), color: const Color(0xFF0F2E53)),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            onPressed: () {
+                                              if (productId != null) _confirmRemoveItem(productId);
+                                            },
+                                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                          ),
+                                        ],
+                                      ),
                                       const SizedBox(height: 8),
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(formatCurrency(price), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF07E2B), fontSize: 14)),
+                                          Expanded(
+                                            child: Text(
+                                              formatCurrency(price),
+                                              style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFFF07E2B), fontSize: R.sp(context, 13)),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
                                           Row(
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
                                               InkWell(
                                                 onTap: () {
@@ -251,7 +287,7 @@ class _CartScreenState extends State<CartScreen> {
                                               ),
                                               Padding(
                                                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                                                child: Text('$quantity', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                                child: Text('$quantity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 13))),
                                               ),
                                               InkWell(
                                                 onTap: () {
@@ -262,15 +298,6 @@ class _CartScreenState extends State<CartScreen> {
                                                   decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(4)),
                                                   child: const Icon(Icons.add, size: 16),
                                                 ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              IconButton(
-                                                onPressed: () {
-                                                  if (productId != null) _confirmRemoveItem(productId);
-                                                },
-                                                icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(),
                                               ),
                                             ],
                                           ),
@@ -286,7 +313,7 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: EdgeInsets.all(R.hPad(context) + 4),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
@@ -297,6 +324,7 @@ class _CartScreenState extends State<CartScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Checkbox(
                                     value: _selectAll,
@@ -315,22 +343,29 @@ class _CartScreenState extends State<CartScreen> {
                                     },
                                     activeColor: const Color(0xFFF07E2B),
                                   ),
-                                  const Text('Tất cả', style: TextStyle(fontSize: 16, color: Color(0xFF0F2E53))),
+                                  Text('Tất cả', style: TextStyle(fontSize: R.sp(context, 14), color: const Color(0xFF0F2E53))),
                                 ],
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  const Text('Tổng thanh toán:', style: TextStyle(fontSize: 14, color: Color(0xFF0F2E53))),
-                                  Text(formatCurrency(total), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFF07E2B))),
-                                ],
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('Tổng thanh toán:', style: TextStyle(fontSize: R.sp(context, 12), color: const Color(0xFF0F2E53)), maxLines: 1),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerRight,
+                                      child: Text(formatCurrency(total), style: TextStyle(fontSize: R.sp(context, 17), fontWeight: FontWeight.bold, color: const Color(0xFFF07E2B))),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: R.isSmall(context) ? 46 : 50,
                             child: ElevatedButton(
                               onPressed: _selectedItems.isEmpty ? null : () {
                                 Navigator.push(
@@ -349,7 +384,7 @@ class _CartScreenState extends State<CartScreen> {
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: const Text('TIẾN HÀNH THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              child: Text('TIẾN HÀNH THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
                             ),
                           ),
                         ],

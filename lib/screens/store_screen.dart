@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:pet_care/services/product_service.dart';
 import 'package:pet_care/screens/cart_screen.dart';
+import 'package:pet_care/utils/responsive.dart';
+import 'package:shimmer/shimmer.dart';
 
 class StoreScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -12,6 +14,10 @@ class StoreScreen extends StatefulWidget {
 
 class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin {
   final ProductService _productService = ProductService();
+
+  // ── Cache tĩnh: giữ sản phẩm giữa các lần navigate ──
+  static List<dynamic>? _cachedProducts;
+
   List<dynamic> _products = [];
   bool _isLoading = true;
   final Set<String> _addingToCart = {};
@@ -24,8 +30,28 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _fetchProducts();
-    _fetchCartCount();
+    _initialLoad();
+  }
+
+  /// Load song song products + cart, dùng cache nếu có
+  Future<void> _initialLoad() async {
+    // Nếu có cache: hiện ngay, rồi refresh ngầm
+    if (_cachedProducts != null && _cachedProducts!.isNotEmpty) {
+      setState(() {
+        _products = _cachedProducts!;
+        _isLoading = false;
+      });
+      // Refresh ngầm không block UI
+      _fetchProducts(silent: true);
+      _fetchCartCount();
+      return;
+    }
+
+    // Chưa có cache: fetch song song cả 2
+    await Future.wait([
+      _fetchProducts(),
+      _fetchCartCount(),
+    ]);
   }
 
   Future<void> _fetchCartCount() async {
@@ -50,9 +76,13 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
     }
   }
 
-  Future<void> _fetchProducts() async {
+  Future<void> _fetchProducts({bool silent = false}) async {
     try {
-      final products = await _productService.getProducts();
+      final products = await _productService
+          .getProducts()
+          .timeout(const Duration(seconds: 10));
+      // Cập nhật cache
+      _cachedProducts = products;
       if (mounted) {
         setState(() {
           _products = products;
@@ -60,7 +90,7 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !silent) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Không thể tải danh sách sản phẩm.')),
@@ -176,7 +206,7 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
     return Scaffold(
       backgroundColor: const Color(0xFFF6FAFD),
       appBar: AppBar(
-        title: const Text('Cửa Hàng PawRent', style: TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+        title: const Text('Cửa Hàng PetCare', style: TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFFF07E2B),
         elevation: 0,
@@ -218,16 +248,35 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
+          ? GridView.builder(
+              padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: R.gridCount(context),
+                childAspectRatio: R.gridAspectRatio(context),
+                crossAxisSpacing: R.isSmall(context) ? 8 : 14,
+                mainAxisSpacing: R.isSmall(context) ? 8 : 14,
+              ),
+              itemCount: 6,
+              itemBuilder: (_, __) => Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade50,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            )
           : _products.isEmpty
               ? const Center(child: Text('Không có sản phẩm nào.', style: TextStyle(color: Colors.grey)))
               : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.50,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+                  padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: R.gridCount(context),
+                    childAspectRatio: R.gridAspectRatio(context),
+                    crossAxisSpacing: R.isSmall(context) ? 8 : 14,
+                    mainAxisSpacing: R.isSmall(context) ? 8 : 14,
                   ),
                   itemCount: _products.length,
                   itemBuilder: (context, index) {
@@ -298,22 +347,22 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
                                     children: [
                                       Text(
                                         product['name'] ?? 'Sản phẩm',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2E53), fontSize: 14),
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFF0F2E53), fontSize: R.sp(context, 14)),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 2),
                                       Row(
                                         children: [
-                                          const Icon(Icons.star, color: Colors.amber, size: 14),
+                                          Icon(Icons.star, color: Colors.amber, size: R.sp(context, 14)),
                                           const SizedBox(width: 4),
                                           Text(
                                             '${product['rating']?['average'] ?? 0.0}',
-                                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                            style: TextStyle(fontSize: R.sp(context, 12), fontWeight: FontWeight.bold),
                                           ),
                                           Text(
                                             ' (${product['rating']?['count'] ?? 0})',
-                                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                            style: TextStyle(fontSize: R.sp(context, 12), color: Colors.grey),
                                           ),
                                         ],
                                       ),
@@ -324,12 +373,14 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
                                     children: [
                                       Text(
                                         formatCurrency(product['price'] ?? 0),
-                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFF07E2B), fontSize: 16),
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: const Color(0xFFF07E2B), fontSize: R.sp(context, 15)),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 6),
                                       SizedBox(
                                         width: double.infinity,
-                                        height: 32,
+                                        height: R.isSmall(context) ? 32 : R.sp(context, 36),
                                         child: ElevatedButton(
                                           onPressed: _addingToCart.contains(product['_id']) 
                                               ? null 
@@ -341,8 +392,14 @@ class _StoreScreenState extends State<StoreScreen> with TickerProviderStateMixin
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                           ),
                                           child: _addingToCart.contains(product['_id']) 
-                                              ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                              : const Text('Thêm vào giỏ', style: TextStyle(fontSize: 12)),
+                                              ? SizedBox(width: R.sp(context, 14), height: R.sp(context, 14), child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                              : FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                                    child: Text('Thêm vào giỏ', style: TextStyle(fontSize: R.sp(context, 12), fontWeight: FontWeight.bold)),
+                                                  ),
+                                                ),
                                         ),
                                       ),
                                     ],

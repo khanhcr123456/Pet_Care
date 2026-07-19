@@ -1,0 +1,1 @@
+import 'dart:convert'; import 'package:http/http.dart' as http; void main() async { var res = await http.post(Uri.parse('https://pawrent-mu.vercel.app/api/v1/payments/sepay/checkout/init'), headers: {'Content-Type': 'application/json'}); print(res.body); }

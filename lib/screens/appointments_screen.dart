@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pet_care/services/booking_service.dart';
 import 'package:pet_care/screens/booking_screen.dart';
 import 'package:pet_care/screens/pet_detail_screen.dart';
+import 'package:pet_care/utils/responsive.dart';
+import 'package:shimmer/shimmer.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -42,16 +44,39 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     }
   }
 
+  Widget _buildAppointmentShimmer(BuildContext context) {
+    return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      padding: EdgeInsets.all(R.hPad(context)),
+      itemCount: 5,
+      itemBuilder: (_, __) => Shimmer.fromColors(
+        baseColor: Colors.grey.shade200,
+        highlightColor: Colors.grey.shade50,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hPad = R.hPad(context);
+
     final content = _isLoading
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
+        ? _buildAppointmentShimmer(context)
         : _appointments.isEmpty
-            ? const Center(
-                child: Text('Bạn chưa có lịch khám nào.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+            ? Center(
+                child: Text('Bạn chưa có lịch khám nào.', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 15))),
               )
             : ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(hPad),
                 itemCount: _appointments.length,
                   itemBuilder: (context, index) {
                     final appt = _appointments[index];
@@ -60,7 +85,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     if (dateStr.isNotEmpty) {
                       final parts = dateStr.split('-');
                       if (parts.length >= 3) {
-                        // Handle potential time parts in the date string just in case
                         final day = parts[2].split('T')[0]; 
                         formattedDate = '$day/${parts[1]}/${parts[0]}';
                       }
@@ -95,10 +119,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     }
 
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 16),
+                      margin: EdgeInsets.only(bottom: R.isSmall(context) ? 12 : 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -108,7 +132,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                 Expanded(
                                   child: Text(
                                     '$formattedDate $startTime'.trim(),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2E53)),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 15), color: const Color(0xFF0F2E53)),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -121,37 +145,37 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                     ),
                                     child: Text(
                                       statusText,
-                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: R.sp(context, 11)),
                                     ),
                                   ),
                               ],
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: R.isSmall(context) ? 8 : 12),
                             Row(
                               children: [
-                                const Icon(Icons.medical_services, size: 16, color: Colors.grey),
+                                Icon(Icons.medical_services, size: R.iconSm(context) - 2, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Expanded(child: Text('Dịch vụ: $serviceName')),
+                                Expanded(child: Text('Dịch vụ: $serviceName', style: TextStyle(fontSize: R.sp(context, 13)))),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(Icons.person, size: 16, color: Colors.grey),
+                                Icon(Icons.person, size: R.iconSm(context) - 2, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Expanded(child: Text('Bác sĩ: $vetName')),
+                                Expanded(child: Text('Bác sĩ: $vetName', style: TextStyle(fontSize: R.sp(context, 13)))),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(Icons.pets, size: 16, color: Colors.grey),
+                                Icon(Icons.pets, size: R.iconSm(context) - 2, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Expanded(child: Text('Thú cưng: $petName')),
+                                Expanded(child: Text('Thú cưng: $petName', style: TextStyle(fontSize: R.sp(context, 13)))),
                               ],
                             ),
                             if (status == 'hoàn_thành' || status == 'completed') ...[
-                              const SizedBox(height: 16),
+                              SizedBox(height: R.isSmall(context) ? 12 : 16),
                               SizedBox(
                                 width: double.infinity,
                                 child: OutlinedButton(
@@ -159,16 +183,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFF0F4C81),
                                     side: const BorderSide(color: Color(0xFF0F4C81)),
+                                    padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 10 : 12),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                   child: Text(
                                     serviceName.toLowerCase().contains('tiêm') ? 'Xem thông tin bản tiêm' : 'Xem kết quả',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 13)),
                                   ),
                                 ),
                               ),
                             ] else if (status != 'hoàn_thành' && status != 'completed' && status != 'đã_hủy' && status != 'cancelled') ...[
-                              const SizedBox(height: 16),
+                              SizedBox(height: R.isSmall(context) ? 12 : 16),
                               SizedBox(
                                 width: double.infinity,
                                 child: OutlinedButton(
@@ -201,13 +226,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                         final apptId = appt['_id'] ?? appt['id'];
                                         await BookingService().cancelAppointment(widget.user['token'], apptId);
                                         if (!mounted) return;
-                                        Navigator.pop(context); // close progress dialog
+                                        Navigator.pop(context);
                                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hủy lịch thành công')));
                                         setState(() => _isLoading = true);
                                         _fetchAppointments();
                                       } catch (e) {
                                         if (!mounted) return;
-                                        Navigator.pop(context); // close progress dialog
+                                        Navigator.pop(context);
                                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: ${e.toString().replaceAll('Exception: ', '')}')));
                                       }
                                     }
@@ -215,9 +240,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.red,
                                     side: const BorderSide(color: Colors.red),
+                                    padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 10 : 12),
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
-                                  child: const Text('Hủy lịch'),
+                                  child: Text('Hủy lịch', style: TextStyle(fontSize: R.sp(context, 13))),
                                 ),
                               ),
                             ],
@@ -234,14 +260,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           context,
           MaterialPageRoute(builder: (context) => BookingScreen(user: widget.user)),
         ).then((_) {
-          // Refresh list when coming back
           setState(() => _isLoading = true);
           _fetchAppointments();
         });
       },
       backgroundColor: const Color(0xFF0F2E53),
       icon: const Icon(Icons.add, color: Colors.white),
-      label: const Text('Tạo lịch hẹn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      label: Text('Tạo lịch hẹn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: R.sp(context, 13))),
     );
 
     if (widget.isEmbedded) {
@@ -255,7 +280,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF6FAFD),
       appBar: AppBar(
-        title: const Text('Lịch Khám Của Tôi', style: TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+        title: Text(
+          'Lịch Khám Của Tôi',
+          style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 18)),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFFF07E2B),
         elevation: 0,
@@ -285,7 +313,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           if (aId == apptId) { targetVax = v; break; }
         }
         if (!mounted) return;
-        Navigator.pop(context); // Close loading
+        Navigator.pop(context);
         
         if (targetVax != null) {
           _showVaccinationDialog(targetVax);
@@ -300,7 +328,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           if (aId == apptId) { targetHr = r; break; }
         }
         if (!mounted) return;
-        Navigator.pop(context); // Close loading
+        Navigator.pop(context);
         
         if (targetHr != null) {
           _showHealthRecordDialog(targetHr);
@@ -310,7 +338,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
@@ -328,7 +356,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Thông tin tiêm phòng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+        title: Text('Thông tin tiêm phòng', style: TextStyle(fontSize: R.sp(context, 17), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,7 +407,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Kết quả khám bệnh', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+        title: Text('Kết quả khám bệnh', style: TextStyle(fontSize: R.sp(context, 17), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -392,7 +420,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               _buildDetailRow('Nhiệt độ:', '$temperature °C'),
               if (imageUrls.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                const Text('Hình ảnh', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                Text('Hình ảnh', style: TextStyle(fontSize: R.sp(context, 13), fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -443,8 +471,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(flex: 2, child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey))),
-          Expanded(flex: 3, child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+          Expanded(flex: 2, child: Text(label, style: TextStyle(fontSize: R.sp(context, 12), color: Colors.grey))),
+          Expanded(flex: 3, child: Text(value, style: TextStyle(fontSize: R.sp(context, 12), fontWeight: FontWeight.bold))),
         ],
       ),
     );

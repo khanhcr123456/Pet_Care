@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:pet_care/utils/responsive.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pet_care/screens/profile_screen.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/services/product_service.dart';
 import 'package:pet_care/services/invoice_service.dart';
 import 'package:pet_care/screens/login_screen.dart';
+import 'package:pet_care/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -18,6 +21,30 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _currentIndex = 0;
+  Map<String, dynamic>? _currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUser = widget.user;
+    _fetchCurrentUser();
+  }
+
+  Future<void> _fetchCurrentUser() async {
+    if (_currentUser == null || _currentUser!['token'] == null) return;
+    try {
+      final userResponse = await AuthService().getMe(_currentUser!['token']);
+      if (mounted) {
+        setState(() {
+          final token = _currentUser!['token'];
+          _currentUser = {...?_currentUser, ...userResponse};
+          _currentUser!['token'] = token;
+        });
+      }
+    } catch (e) {
+      print('Error fetching admin profile: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,17 +55,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: Colors.white,
         elevation: 1,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person, color: Color(0xFF0F2E53)),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(user: widget.user)));
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: () {
-              Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Center(
+              child: ClipOval(
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  color: Colors.grey[200],
+                  child: (_currentUser?['avatar'] != null && _currentUser!['avatar'].toString().trim().isNotEmpty && _currentUser!['avatar'].toString().startsWith('http'))
+                      ? Image.network(
+                          _currentUser!['avatar'],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Image.asset('assets/images/default_vet.png', fit: BoxFit.cover),
+                        )
+                      : Image.asset('assets/images/default_vet.png', fit: BoxFit.cover),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -53,6 +88,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.medical_services), label: 'Dịch vụ'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Sản phẩm'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Tài khoản'),
         ],
       ),
     );
@@ -66,11 +102,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return AdminProductsTab(user: widget.user);
       case 2:
         return AdminOrdersTab(user: widget.user);
+      case 3:
+        return ProfileScreen(
+          user: _currentUser,
+          onUserUpdated: (updatedUser) {
+            setState(() {
+              _currentUser = updatedUser;
+            });
+          },
+        );
       default:
         return const Center(child: Text('Unknown screen'));
     }
   }
 }
+
 
 // --------------------------------------------------------------------------
 // QUẢN LÝ DỊCH VỤ
@@ -163,20 +209,23 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
     File? selectedImage;
     bool isAdding = false;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Thêm dịch vụ mới'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+            return Container(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Thêm dịch vụ mới', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: 'Tên dịch vụ', border: OutlineInputBorder()),
@@ -185,7 +234,8 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                     TextField(
                       controller: descController,
                       decoration: const InputDecoration(labelText: 'Mô tả', border: OutlineInputBorder()),
-                      maxLines: 3,
+                      maxLines: 5,
+                      minLines: 3,
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -208,7 +258,7 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(selectedImage!, height: 300, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.file(selectedImage!, height: 150, width: double.infinity, fit: BoxFit.contain),
                         ),
                       ),
                     Row(
@@ -230,53 +280,57 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isAdding ? null : () => Navigator.pop(ctx),
+                          child: const Text('Hủy'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isAdding
+                              ? null
+                              : () async {
+                                  if (nameController.text.isEmpty || priceController.text.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên và giá')));
+                                    return;
+                                  }
+                                  setDialogState(() => isAdding = true);
+                                  try {
+                                    final Map<String, dynamic> addData = {
+                                      'name': nameController.text,
+                                      'description': descController.text,
+                                      'price': priceController.text,
+                                      'type': selectedType,
+                                    };
+                                    
+                                    await PetService().addService(
+                                      widget.user['token'], 
+                                      addData,
+                                      imageFile: selectedImage,
+                                    );
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thêm thành công')));
+                                      setState(() => _isLoading = true);
+                                      _fetchServices();
+                                    }
+                                  } catch (e) {
+                                    setDialogState(() => isAdding = false);
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
+                          child: isAdding ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Thêm', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isAdding ? null : () => Navigator.pop(ctx),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: isAdding
-                      ? null
-                      : () async {
-                          if (nameController.text.isEmpty || priceController.text.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên và giá')));
-                            return;
-                          }
-                          setDialogState(() => isAdding = true);
-                          try {
-                            final Map<String, dynamic> addData = {
-                              'name': nameController.text,
-                              'description': descController.text,
-                              'price': priceController.text,
-                              'type': selectedType,
-                            };
-                            
-                            await PetService().addService(
-                              widget.user['token'], 
-                              addData,
-                              imageFile: selectedImage,
-                            );
-                            
-                            if (mounted) {
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thêm thành công')));
-                              setState(() => _isLoading = true);
-                              _fetchServices();
-                            }
-                          } catch (e) {
-                            setDialogState(() => isAdding = false);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
-                  child: isAdding ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Thêm', style: TextStyle(color: Colors.white)),
-                ),
-              ],
             );
           }
         );
@@ -313,20 +367,23 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
     final String? existingImageUrl = (images != null && images.isNotEmpty) ? images[0].toString() : null;
     bool isUpdating = false;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Cập nhật dịch vụ'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+            return Container(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Cập nhật dịch vụ', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: 'Tên dịch vụ', border: OutlineInputBorder()),
@@ -335,7 +392,8 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                     TextField(
                       controller: descController,
                       decoration: const InputDecoration(labelText: 'Mô tả', border: OutlineInputBorder()),
-                      maxLines: 3,
+                      maxLines: 5,
+                      minLines: 3,
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -358,7 +416,7 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(selectedImage!, height: 300, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.file(selectedImage!, height: 150, width: double.infinity, fit: BoxFit.contain),
                         ),
                       )
                     else if (existingImageUrl != null)
@@ -366,7 +424,7 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(existingImageUrl, height: 300, width: double.infinity, fit: BoxFit.contain, errorBuilder: (_,__,___) => const SizedBox()),
+                          child: Image.network(existingImageUrl, height: 150, width: double.infinity, fit: BoxFit.contain, errorBuilder: (_,__,___) => const SizedBox()),
                         ),
                       ),
                     Row(
@@ -388,50 +446,54 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isUpdating ? null : () => Navigator.pop(ctx),
+                          child: const Text('Hủy'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isUpdating
+                              ? null
+                              : () async {
+                                  setDialogState(() => isUpdating = true);
+                                  try {
+                                    final Map<String, dynamic> updateData = {
+                                      'name': nameController.text,
+                                      'description': descController.text,
+                                      'price': priceController.text,
+                                      'type': selectedType,
+                                    };
+                                    
+                                    await PetService().updateService(
+                                      widget.user['token'], 
+                                      svc['_id'] ?? svc['id'], 
+                                      updateData,
+                                      imageFile: selectedImage,
+                                    );
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật thành công')));
+                                      setState(() => _isLoading = true);
+                                      _fetchServices();
+                                    }
+                                  } catch (e) {
+                                    setDialogState(() => isUpdating = false);
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
+                          child: isUpdating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Lưu', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isUpdating ? null : () => Navigator.pop(ctx),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: isUpdating
-                      ? null
-                      : () async {
-                          setDialogState(() => isUpdating = true);
-                          try {
-                            final Map<String, dynamic> updateData = {
-                              'name': nameController.text,
-                              'description': descController.text,
-                              'price': priceController.text,
-                              'type': selectedType,
-                            };
-                            
-                            await PetService().updateService(
-                              widget.user['token'], 
-                              svc['_id'] ?? svc['id'], 
-                              updateData,
-                              imageFile: selectedImage,
-                            );
-                            
-                            if (mounted) {
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật thành công')));
-                              setState(() => _isLoading = true);
-                              _fetchServices();
-                            }
-                          } catch (e) {
-                            setDialogState(() => isUpdating = false);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
-                  child: isUpdating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Lưu', style: TextStyle(color: Colors.white)),
-                ),
-              ],
             );
           }
         );
@@ -447,10 +509,10 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddServiceDialog,
         backgroundColor: const Color(0xFFF07E2B),
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: Colors.white),
       ),
       body: ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
       itemCount: _services.length,
       itemBuilder: (context, index) {
         final svc = _services[index];
@@ -463,49 +525,59 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: imageUrl != null
-                      ? Image.network(imageUrl, width: 80, height: 80, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Container(width: 80, height: 80, color: const Color(0xFF0F2E53), child: const Icon(Icons.medical_services, color: Colors.white)))
-                      : Container(width: 80, height: 80, color: const Color(0xFF0F2E53), child: const Icon(Icons.medical_services, color: Colors.white)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(svc['name'] ?? 'Dịch vụ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text('Giá: $price VND', style: const TextStyle(color: Colors.black87)),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Mô tả: $description',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Trạng thái: ${isActive ? 'Hoạt động' : 'Tạm ngưng'}',
-                        style: TextStyle(color: isActive ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: imageUrl != null
+                          ? Image.network(imageUrl, width: R.isSmall(context) ? 60 : 80, height: R.isSmall(context) ? 60 : 80, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: R.isSmall(context) ? 60 : 80, height: R.isSmall(context) ? 60 : 80, color: Colors.grey[200], child: Icon(Icons.medical_services, color: Colors.grey[500], size: R.isSmall(context) ? 25 : 35)))
+                          : Container(width: R.isSmall(context) ? 60 : 80, height: R.isSmall(context) ? 60 : 80, color: Colors.grey[200], child: Icon(Icons.medical_services, color: Colors.grey[500], size: R.isSmall(context) ? 25 : 35)),
+                    ),
+                    SizedBox(width: R.isSmall(context) ? 8 : 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(svc['name'] ?? 'Dịch vụ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: const Color(0xFF0F2E53))),
+                          const SizedBox(height: 4),
+                          Text('Giá: $price VND', style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Trạng thái: ${isActive ? 'Hoạt động' : 'Tạm ngưng'}',
+                            style: TextStyle(color: isActive ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: R.sp(context, 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Mô tả: $description',
+                  style: TextStyle(fontSize: R.sp(context, 13), color: Colors.black87),
+                ),
+                const Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                      label: Text('Chỉnh sửa', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.blue)),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.blue), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                       onPressed: () => _showEditServiceDialog(svc),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                      label: Text('Xóa', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.red)),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                       onPressed: () => _deleteService(svc),
                     ),
                   ],
@@ -574,20 +646,23 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
     File? selectedImage;
     bool isAdding = false;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Thêm sản phẩm mới'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+            return Container(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Thêm sản phẩm mới', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: 'Tên sản phẩm', border: OutlineInputBorder()),
@@ -596,7 +671,8 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                     TextField(
                       controller: descController,
                       decoration: const InputDecoration(labelText: 'Mô tả', border: OutlineInputBorder()),
-                      maxLines: 3,
+                      maxLines: 5,
+                      minLines: 3,
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -625,7 +701,7 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(selectedImage!, height: 300, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.file(selectedImage!, height: 150, width: double.infinity, fit: BoxFit.contain),
                         ),
                       ),
                     Row(
@@ -647,56 +723,60 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isAdding ? null : () => Navigator.pop(ctx),
+                          child: const Text('Hủy'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isAdding
+                              ? null
+                              : () async {
+                                  if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên, giá và số lượng')));
+                                    return;
+                                  }
+                                  setDialogState(() => isAdding = true);
+                                  try {
+                                    final int stockQuantity = int.tryParse(stockController.text) ?? 0;
+                                    final Map<String, dynamic> addData = {
+                                      'name': nameController.text,
+                                      'description': descController.text,
+                                      'price': priceController.text,
+                                      'category': selectedCategory,
+                                      'petTypes': ['dog', 'cat', 'bird'],
+                                      'stock': {'quantity': stockQuantity, 'status': stockQuantity > 0 ? 'in_stock' : 'out_of_stock'},
+                                    };
+                                    
+                                    await ProductService().addProduct(
+                                      widget.user['token'], 
+                                      addData,
+                                      imageFile: selectedImage,
+                                    );
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thêm thành công')));
+                                      setState(() => _isLoading = true);
+                                      _fetchProducts();
+                                    }
+                                  } catch (e) {
+                                    setDialogState(() => isAdding = false);
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
+                          child: isAdding ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Thêm', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isAdding ? null : () => Navigator.pop(ctx),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: isAdding
-                      ? null
-                      : () async {
-                          if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên, giá và số lượng')));
-                            return;
-                          }
-                          setDialogState(() => isAdding = true);
-                          try {
-                            final int stockQuantity = int.tryParse(stockController.text) ?? 0;
-                            final Map<String, dynamic> addData = {
-                              'name': nameController.text,
-                              'description': descController.text,
-                              'price': priceController.text,
-                              'category': selectedCategory,
-                              'petTypes': ['dog', 'cat', 'bird'],
-                              'stock': {'quantity': stockQuantity, 'status': stockQuantity > 0 ? 'in_stock' : 'out_of_stock'},
-                            };
-                            
-                            await ProductService().addProduct(
-                              widget.user['token'], 
-                              addData,
-                              imageFile: selectedImage,
-                            );
-                            
-                            if (mounted) {
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thêm thành công')));
-                              setState(() => _isLoading = true);
-                              _fetchProducts();
-                            }
-                          } catch (e) {
-                            setDialogState(() => isAdding = false);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
-                  child: isAdding ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Thêm', style: TextStyle(color: Colors.white)),
-                ),
-              ],
             );
           }
         );
@@ -785,20 +865,23 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
     bool isUpdating = false;
     final id = prod['_id'] ?? prod['id'];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Cập nhật sản phẩm'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+            return Container(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Cập nhật sản phẩm', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+                    const SizedBox(height: 20),
                     TextField(
                       controller: nameController,
                       decoration: const InputDecoration(labelText: 'Tên sản phẩm', border: OutlineInputBorder()),
@@ -807,7 +890,8 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                     TextField(
                       controller: descController,
                       decoration: const InputDecoration(labelText: 'Mô tả', border: OutlineInputBorder()),
-                      maxLines: 3,
+                      maxLines: 5,
+                      minLines: 3,
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -836,7 +920,7 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.file(selectedImage!, height: 300, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.file(selectedImage!, height: 150, width: double.infinity, fit: BoxFit.contain),
                         ),
                       )
                     else if (existingImageUrl != null)
@@ -844,7 +928,7 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(existingImageUrl!, height: 300, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.network(existingImageUrl!, height: 150, width: double.infinity, fit: BoxFit.contain),
                         ),
                       ),
                     Row(
@@ -866,57 +950,61 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: isUpdating ? null : () => Navigator.pop(ctx),
+                          child: const Text('Hủy'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isUpdating
+                              ? null
+                              : () async {
+                                  if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên, giá và số lượng')));
+                                    return;
+                                  }
+                                  setDialogState(() => isUpdating = true);
+                                  try {
+                                    final int stockQuantity = int.tryParse(stockController.text) ?? 0;
+                                    final Map<String, dynamic> updateData = {
+                                      'name': nameController.text,
+                                      'description': descController.text,
+                                      'price': priceController.text,
+                                      'category': selectedCategory,
+                                      'petTypes': ['dog', 'cat', 'bird'],
+                                      'stock': {'quantity': stockQuantity, 'status': stockQuantity > 0 ? 'in_stock' : 'out_of_stock'},
+                                    };
+                                    
+                                    await ProductService().updateProduct(
+                                      widget.user['token'], 
+                                      id,
+                                      updateData,
+                                      imageFile: selectedImage,
+                                    );
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật thành công')));
+                                      setState(() => _isLoading = true);
+                                      _fetchProducts();
+                                    }
+                                  } catch (e) {
+                                    setDialogState(() => isUpdating = false);
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
+                          child: isUpdating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Lưu', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isUpdating ? null : () => Navigator.pop(ctx),
-                  child: const Text('Hủy'),
-                ),
-                ElevatedButton(
-                  onPressed: isUpdating
-                      ? null
-                      : () async {
-                          if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng nhập tên, giá và số lượng')));
-                            return;
-                          }
-                          setDialogState(() => isUpdating = true);
-                          try {
-                            final int stockQuantity = int.tryParse(stockController.text) ?? 0;
-                            final Map<String, dynamic> updateData = {
-                              'name': nameController.text,
-                              'description': descController.text,
-                              'price': priceController.text,
-                              'category': selectedCategory,
-                              'petTypes': ['dog', 'cat', 'bird'],
-                              'stock': {'quantity': stockQuantity, 'status': stockQuantity > 0 ? 'in_stock' : 'out_of_stock'},
-                            };
-                            
-                            await ProductService().updateProduct(
-                              widget.user['token'], 
-                              id,
-                              updateData,
-                              imageFile: selectedImage,
-                            );
-                            
-                            if (mounted) {
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật thành công')));
-                              setState(() => _isLoading = true);
-                              _fetchProducts();
-                            }
-                          } catch (e) {
-                            setDialogState(() => isUpdating = false);
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF07E2B)),
-                  child: isUpdating ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Lưu', style: TextStyle(color: Colors.white)),
-                ),
-              ],
             );
           }
         );
@@ -932,14 +1020,15 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddProductDialog,
         backgroundColor: const Color(0xFFF07E2B),
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: Colors.white),
       ),
       body: ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
       itemCount: _products.length,
       itemBuilder: (context, index) {
         final prod = _products[index];
         final price = prod['price']?.toString() ?? '0';
+        final description = prod['description'] ?? 'Không có mô tả';
         
         String? imageUrl;
         final images = prod['images'] as List<dynamic>?;
@@ -963,37 +1052,59 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: imageUrl != null 
-                    ? Image.network(imageUrl, width: 80, height: 80, fit: BoxFit.contain, errorBuilder: (_,__,___) => Container(width: 80, height: 80, color: Colors.grey[200], child: const Icon(Icons.inventory_2, size: 40)))
-                    : Container(width: 80, height: 80, color: Colors.grey[200], child: const Icon(Icons.inventory_2, size: 40)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(prod['name'] ?? 'Sản phẩm', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text('Giá: $price VND\nKho: $stockQty'),
-                    ],
-                  ),
-                ),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: imageUrl != null 
+                        ? Image.network(imageUrl, width: R.isSmall(context) ? 60 : 80, height: R.isSmall(context) ? 60 : 80, fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(width: R.isSmall(context) ? 60 : 80, height: R.isSmall(context) ? 60 : 80, color: Colors.grey[200], child: Icon(Icons.inventory_2, size: R.isSmall(context) ? 30 : 40, color: Colors.grey[500])))
+                        : Container(width: R.isSmall(context) ? 60 : 80, height: R.isSmall(context) ? 60 : 80, color: Colors.grey[200], child: Icon(Icons.inventory_2, size: R.isSmall(context) ? 30 : 40, color: Colors.grey[500])),
+                    ),
+                    SizedBox(width: R.isSmall(context) ? 8 : 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(prod['name'] ?? 'Sản phẩm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: const Color(0xFF0F2E53))),
+                          const SizedBox(height: 4),
+                          Text('Giá: $price VND', style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Kho: $stockQty',
+                            style: TextStyle(color: stockQty > 0 ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: R.sp(context, 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Mô tả: $description',
+                  style: TextStyle(fontSize: R.sp(context, 13), color: Colors.black87),
+                ),
+                const Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                      label: Text('Chỉnh sửa', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.blue)),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.blue), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                       onPressed: () => _showEditProductDialog(prod),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                      label: Text('Xóa', style: TextStyle(fontSize: R.sp(context, 13), color: Colors.red)),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                       onPressed: () => _deleteProduct(prod),
                     ),
                   ],
@@ -1022,6 +1133,7 @@ class AdminOrdersTab extends StatefulWidget {
 class _AdminOrdersTabState extends State<AdminOrdersTab> {
   bool _isLoading = true;
   List<dynamic> _invoices = [];
+  Map<String, dynamic> _productCache = {};
 
   @override
   void initState() {
@@ -1031,8 +1143,21 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
 
   Future<void> _fetchInvoices() async {
     try {
-      final data = await InvoiceService().getInvoices(widget.user['token'], limit: 100);
+      final results = await Future.wait([
+        InvoiceService().getInvoices(widget.user['token'], limit: 100),
+        ProductService().getProducts(limit: 100),
+      ]);
+      final data = results[0] as List<dynamic>;
+      final products = results[1] as List<dynamic>;
+      
+      final cache = <String, dynamic>{};
+      for (var p in products) {
+        final pid = p['_id'] ?? p['id'];
+        if (pid != null) cache[pid.toString()] = p;
+      }
+      
       if (!mounted) return;
+      _productCache = cache;
       
       // Chỉ lấy các đơn hàng mà bên trong mảng items có chứa sản phẩm (type: 'product')
       final productInvoices = data.where((inv) {
@@ -1061,8 +1186,17 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
       if (mounted) {
         Navigator.pop(context); // pop loading
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật trạng thái thành công')));
-        setState(() => _isLoading = true);
-        _fetchInvoices();
+        setState(() {
+          final index = _invoices.indexWhere((inv) => (inv['_id']?.toString() ?? inv['id']?.toString()) == id);
+          if (index != -1) {
+            if (_invoices[index] is Map) {
+              final updatedInv = Map<String, dynamic>.from(_invoices[index]);
+              updatedInv['orderStatus'] = status;
+              updatedInv['status'] = status;
+              _invoices[index] = updatedInv;
+            }
+          }
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -1076,7 +1210,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
       itemCount: _invoices.length,
       itemBuilder: (context, index) {
         final inv = _invoices[index];
@@ -1151,38 +1285,73 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
           address = sa.toString().trim();
         }
         
-        return Card(
-          elevation: 2,
-          margin: const EdgeInsets.only(bottom: 12),
-          color: const Color(0xFFF8F1E7),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: ExpansionTile(
-            leading: const CircleAvatar(backgroundColor: Color(0xFFF07E2B), child: Icon(Icons.receipt_long, color: Colors.white)),
-            title: Text('Đơn hàng: ${inv['_id']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF333333), fontSize: 16)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+            ],
+            border: Border.all(color: Colors.grey.withOpacity(0.1)),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              childrenPadding: EdgeInsets.zero,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Đơn hàng: #${(inv['_id']?.toString() ?? inv['id']?.toString() ?? '')}',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14), color: const Color(0xFF0F2E53)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: nextStepColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: nextStepColor.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          status,
+                          style: TextStyle(color: nextStepColor, fontWeight: FontWeight.bold, fontSize: R.sp(context, 11)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                 
+                ],
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text('$total VND', style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
+              ),
+              iconColor: const Color(0xFF555555),
+              collapsedIconColor: const Color(0xFF555555),
               children: [
-                const SizedBox(height: 4),
-                Text('Tổng: $total VND', style: const TextStyle(color: Color(0xFF555555), fontSize: 13)),
-                const SizedBox(height: 2),
-                Text('Trạng thái: $status', style: const TextStyle(color: Color(0xFF555555), fontSize: 13)),
-              ],
-            ),
-            iconColor: const Color(0xFF555555),
-            collapsedIconColor: const Color(0xFF555555),
-            children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 8.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Thông tin giao hàng:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2E53), fontSize: 14)),
-                    const SizedBox(height: 8),
-                    Text('Tên: $customerName', style: const TextStyle(fontSize: 14, color: Color(0xFF333333))),
-                    const SizedBox(height: 4),
-                    Text('SĐT: $customerPhone', style: const TextStyle(fontSize: 14, color: Color(0xFF333333))),
-                    const SizedBox(height: 4),
-                    Text('Địa chỉ: $address', style: const TextStyle(fontSize: 14, color: Color(0xFF333333))),
+                    Text('Thông tin giao hàng:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2E53), fontSize: 14)),
+                    SizedBox(height: 8),
+                    Text('Tên: $customerName', style: TextStyle(fontSize: R.sp(context, 14), color: Color(0xFF333333))),
+                    SizedBox(height: 4),
+                    Text('SĐT: $customerPhone', style: TextStyle(fontSize: R.sp(context, 14), color: Color(0xFF333333))),
+                    SizedBox(height: 4),
+                    Text('Địa chỉ: $address', style: TextStyle(fontSize: R.sp(context, 14), color: Color(0xFF333333))),
                     const Divider(color: Colors.black12, thickness: 1, height: 24),
                     const Text('Chi tiết sản phẩm:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2E53), fontSize: 14)),
                     const SizedBox(height: 12),
@@ -1190,15 +1359,58 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                       final name = item['name'] ?? 'Sản phẩm';
                       final qty = item['quantity']?.toString() ?? '1';
                       final price = item['price']?.toString() ?? '0';
+                      
+                      final refId = item['refId']?.toString() ?? item['productId']?.toString();
+                      String? productImg;
+                      if (refId != null && _productCache.containsKey(refId)) {
+                        final pData = _productCache[refId];
+                        if (pData['images'] is List && pData['images'].isNotEmpty) {
+                          final firstImg = pData['images'][0];
+                          if (firstImg is String) {
+                            productImg = firstImg;
+                          } else if (firstImg is Map && firstImg['url'] != null) {
+                            productImg = firstImg['url'].toString();
+                          }
+                        } else if (pData['image'] is String) {
+                          productImg = pData['image'];
+                        }
+                      }
+
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
+                        padding: const EdgeInsets.only(bottom: 12.0),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: Text('- $name', style: const TextStyle(fontSize: 14, color: Color(0xFF333333)))),
-                            Text('x$qty', style: const TextStyle(fontSize: 14, color: Colors.grey)),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: (productImg != null && productImg.startsWith('http'))
+                                  ? Image.network(
+                                      productImg,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (c, e, s) => Container(width: 48, height: 48, color: Colors.grey[200], child: const Icon(Icons.inventory, color: Colors.grey, size: 20)),
+                                    )
+                                  : Container(
+                                      width: 48,
+                                      height: 48,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.inventory, color: Colors.grey, size: 20),
+                                    ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name, style: TextStyle(fontSize: R.sp(context, 14), color: const Color(0xFF333333), fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 4),
+                                  Text('Số lượng: $qty', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.grey[600])),
+                                ],
+                              )
+                            ),
                             const SizedBox(width: 16),
-                            Text('$price VND', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+                            Text('$price VND', style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold, color: const Color(0xFF333333))),
                           ],
                         ),
                       );
@@ -1207,8 +1419,8 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Thành tiền:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2E53))),
-                        Text('$total VND', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFF07E2B))),
+                        Text('Thành tiền:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFF0F2E53))),
+                        Text('$total VND', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFFF07E2B))),
                       ],
                     ),
                   ],
@@ -1233,7 +1445,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                               _updateOrderStatus(inv['_id'], nextStepStatus!);
                             }
                           },
-                          child: Text(nextStepText, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                          child: Text(nextStepText, style: TextStyle(color: Colors.white, fontSize: R.sp(context, 15), fontWeight: FontWeight.bold)),
                         ),
                       ),
                       if (canCancel) const SizedBox(width: 16),
@@ -1250,13 +1462,14 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                           onPressed: () {
                             _updateOrderStatus(inv['_id'], 'cancelled');
                           },
-                          child: const Text('Hủy', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                          child: Text('Hủy', style: TextStyle(color: Colors.white, fontSize: R.sp(context, 15), fontWeight: FontWeight.bold)),
                         ),
                       ),
                   ],
                 ),
               )
             ],
+            ),
           ),
         );
       },

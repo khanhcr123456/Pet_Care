@@ -4,6 +4,8 @@ import 'package:pet_care/services/booking_service.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:pet_care/screens/pets_screen.dart';
+import 'package:pet_care/utils/responsive.dart';
+import 'package:shimmer/shimmer.dart';
 
 class BookingScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -44,15 +46,21 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Future<void> _fetchData() async {
     try {
-      final pets = await PetService().getPets(widget.user['token']);
-      final services = await PetService().getServices();
-      final vets = await AuthService().getVets(limit: 50);
+      final results = await Future.wait([
+        PetService().getPets(widget.user['token']),
+        PetService().getServices(),
+        AuthService().getVets(limit: 50),
+      ]);
+      
+      final pets = results[0];
+      final services = results[1];
+      final vets = results[2];
       
       if (mounted) {
         setState(() {
-          _pets = pets;
-          _services = services;
-          _vets = vets;
+          _pets = pets as List<dynamic>;
+          _services = services as List<dynamic>;
+          _vets = vets as List<dynamic>;
           _isLoading = false;
           
           if (_selectedPetId != null && !_pets.any((p) => p['_id'] == _selectedPetId)) {
@@ -119,8 +127,28 @@ class _BookingScreenState extends State<BookingScreen> {
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate!);
       final slots = await BookingService().getAvailableSlots(widget.user['token'], _selectedVetId!, dateStr);
       if (mounted) {
+        final now = DateTime.now();
+        final isToday = _selectedDate!.year == now.year &&
+            _selectedDate!.month == now.month &&
+            _selectedDate!.day == now.day;
+            
+        final filteredSlots = slots.where((slot) {
+          if (!isToday) return true;
+          final startTime = slot['startTime'];
+          if (startTime == null) return true;
+          
+          final parts = startTime.split(':');
+          if (parts.length != 2) return true;
+          
+          final hour = int.tryParse(parts[0]) ?? 0;
+          final minute = int.tryParse(parts[1]) ?? 0;
+          
+          final slotDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+          return slotDateTime.isAfter(now);
+        }).toList();
+
         setState(() {
-          _timeSlots = slots;
+          _timeSlots = filteredSlots;
           _isLoadingSlots = false;
           if (_selectedTimeSlot != null && !_timeSlots.any((s) => s['startTime'] == _selectedTimeSlot!['startTime'])) {
             _selectedTimeSlot = null;
@@ -161,25 +189,52 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hPad = R.hPad(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF6FAFD),
       appBar: AppBar(
-        title: const Text('Đặt lịch khám', style: TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+        title: Text(
+          'Đặt lịch khám',
+          style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 18)),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFFF07E2B),
         elevation: 0,
       ),
       body: _isLoading 
-        ? const Center(child: CircularProgressIndicator())
+        ? Padding(
+            padding: EdgeInsets.all(hPad + 4),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey.shade200,
+              highlightColor: Colors.grey.shade50,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int i = 0; i < 4; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(height: 20, width: 150, color: Colors.white, margin: const EdgeInsets.only(bottom: 12)),
+                          Container(height: 56, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
+                        ],
+                      ),
+                    ),
+                  Container(height: 54, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12))),
+                ],
+              ),
+            ),
+          )
         : SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(hPad + 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildSectionTitle('1. Chọn thú cưng'),
                 if (_pets.isEmpty)
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(hPad),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFF9E6),
                       borderRadius: BorderRadius.circular(12),
@@ -189,10 +244,13 @@ class _BookingScreenState extends State<BookingScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.pets, color: Color(0xFFF07E2B)),
+                            Icon(Icons.pets, color: const Color(0xFFF07E2B), size: R.iconSm(context)),
                             const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text('Bạn chưa có hồ sơ thú cưng nào. Vui lòng thêm thú cưng để tiếp tục đặt lịch hẹn.', style: TextStyle(color: Color(0xFF0F2E53))),
+                            Expanded(
+                              child: Text(
+                                'Bạn chưa có hồ sơ thú cưng nào. Vui lòng thêm thú cưng để tiếp tục đặt lịch hẹn.',
+                                style: TextStyle(color: const Color(0xFF0F2E53), fontSize: R.sp(context, 13)),
+                              ),
                             ),
                           ],
                         ),
@@ -215,9 +273,10 @@ class _BookingScreenState extends State<BookingScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF07E2B),
                               foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 11 : 13),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: const Text('Thêm thú cưng ngay', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: Text('Thêm thú cưng ngay', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
                           ),
                         ),
                       ],
@@ -232,7 +291,7 @@ class _BookingScreenState extends State<BookingScreen> {
                         _selectedPetId,
                         _pets.map((p) => DropdownMenuItem<String>(
                           value: p['_id'],
-                          child: Text(p['name'] ?? 'Không tên'),
+                          child: Text(p['name'] ?? 'Không tên', style: TextStyle(fontSize: R.sp(context, 14))),
                         )).toList(),
                         (val) => setState(() => _selectedPetId = val),
                       ),
@@ -252,8 +311,8 @@ class _BookingScreenState extends State<BookingScreen> {
                               _fetchData();
                             });
                           },
-                          icon: const Icon(Icons.add_circle_outline, size: 16),
-                          label: const Text('Thêm thú cưng mới', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          icon: Icon(Icons.add_circle_outline, size: R.iconSm(context) - 2),
+                          label: Text('Thêm thú cưng mới', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 13))),
                           style: TextButton.styleFrom(
                             foregroundColor: const Color(0xFFF07E2B),
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -265,26 +324,26 @@ class _BookingScreenState extends State<BookingScreen> {
                     ],
                   ),
                 
-                const SizedBox(height: 24),
+                SizedBox(height: R.isSmall(context) ? 18 : 24),
                 _buildSectionTitle('2. Chọn dịch vụ'),
                 _buildDropdown(
                   'Chọn dịch vụ cần khám',
                   _selectedServiceId,
                   _services.map((s) => DropdownMenuItem<String>(
                     value: s['_id'],
-                    child: Text(s['name'] ?? 'Dịch vụ'),
+                    child: Text(s['name'] ?? 'Dịch vụ', style: TextStyle(fontSize: R.sp(context, 14))),
                   )).toList(),
                   (val) => setState(() => _selectedServiceId = val),
                 ),
                 
-                const SizedBox(height: 24),
+                SizedBox(height: R.isSmall(context) ? 18 : 24),
                 _buildSectionTitle('3. Chọn bác sĩ'),
                 _buildDropdown(
                   'Chọn bác sĩ',
                   _selectedVetId,
                   _vets.map((v) => DropdownMenuItem<String>(
                     value: v['_id'] ?? v['id'],
-                    child: Text(v['fullName'] ?? v['name'] ?? 'Bác sĩ'),
+                    child: Text(v['fullName'] ?? v['name'] ?? 'Bác sĩ', style: TextStyle(fontSize: R.sp(context, 14))),
                   )).toList(),
                   (val) {
                     setState(() => _selectedVetId = val);
@@ -292,12 +351,12 @@ class _BookingScreenState extends State<BookingScreen> {
                   },
                 ),
                 
-                const SizedBox(height: 24),
+                SizedBox(height: R.isSmall(context) ? 18 : 24),
                 _buildSectionTitle('4. Chọn ngày & giờ'),
                 GestureDetector(
                   onTap: _selectDate,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    padding: EdgeInsets.symmetric(horizontal: hPad, vertical: R.isSmall(context) ? 13 : 16),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -310,32 +369,50 @@ class _BookingScreenState extends State<BookingScreen> {
                           _selectedDate == null ? 'Chọn ngày khám' : DateFormat('yyyy-MM-dd').format(_selectedDate!),
                           style: TextStyle(
                             color: _selectedDate == null ? Colors.grey : const Color(0xFF0F2E53),
-                            fontSize: 16,
+                            fontSize: R.sp(context, 15),
                           ),
                         ),
-                        const Icon(Icons.calendar_today, color: Color(0xFFF07E2B)),
+                        Icon(Icons.calendar_today, color: const Color(0xFFF07E2B), size: R.iconSm(context)),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 if (_selectedVetId == null || _selectedDate == null)
-                  const Text('Vui lòng chọn bác sĩ và ngày khám để xem giờ trống.', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
+                  Text('Vui lòng chọn bác sĩ và ngày khám để xem giờ trống.', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: R.sp(context, 13)))
                 else if (_isLoadingSlots)
-                  const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
-                else if (_timeSlots.isEmpty)
-                  const Text('Không có giờ khám nào trống trong ngày này.', style: TextStyle(color: Colors.redAccent))
-                else
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
+                    children: List.generate(
+                      4,
+                      (index) => Shimmer.fromColors(
+                        baseColor: Colors.grey.shade200,
+                        highlightColor: Colors.grey.shade50,
+                        child: Container(
+                          width: 80,
+                          height: 40,
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (_timeSlots.isEmpty)
+                  Text('Không có giờ khám nào trống trong ngày này.', style: TextStyle(color: Colors.redAccent, fontSize: R.sp(context, 13)))
+                else
+                  Wrap(
+                    spacing: R.isSmall(context) ? 8 : 10,
+                    runSpacing: R.isSmall(context) ? 8 : 10,
                     children: _timeSlots.map((timeSlot) {
                       final isSelected = _selectedTimeSlot != null && _selectedTimeSlot!['startTime'] == timeSlot['startTime'];
                       final timeStr = timeSlot['startTime']!;
                       return GestureDetector(
                         onTap: () => setState(() => _selectedTimeSlot = timeSlot),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: R.isSmall(context) ? 12 : 16,
+                            vertical: R.isSmall(context) ? 10 : 12,
+                          ),
                           decoration: BoxDecoration(
                             color: isSelected ? const Color(0xFFF07E2B) : Colors.white,
                             borderRadius: BorderRadius.circular(8),
@@ -346,6 +423,7 @@ class _BookingScreenState extends State<BookingScreen> {
                             style: TextStyle(
                               color: isSelected ? Colors.white : const Color(0xFF0F2E53),
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontSize: R.sp(context, 13),
                             ),
                           ),
                         ),
@@ -353,18 +431,18 @@ class _BookingScreenState extends State<BookingScreen> {
                     }).toList(),
                   ),
                 
-                const SizedBox(height: 40),
+                SizedBox(height: R.isSmall(context) ? 28 : 40),
                 ElevatedButton(
                   onPressed: _isSubmitting ? null : _submitBooking,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F4C81),
                     foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 54),
+                    minimumSize: Size(double.infinity, R.isSmall(context) ? 48 : 54),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _isSubmitting
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('XÁC NHẬN ĐẶT LỊCH', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    : Text('XÁC NHẬN ĐẶT LỊCH', style: TextStyle(fontSize: R.sp(context, 15), fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -378,10 +456,10 @@ class _BookingScreenState extends State<BookingScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(
         title,
-        style: const TextStyle(
-          fontSize: 16,
+        style: TextStyle(
+          fontSize: R.sp(context, 15),
           fontWeight: FontWeight.bold,
-          color: Color(0xFF0F2E53),
+          color: const Color(0xFF0F2E53),
         ),
       ),
     );
@@ -394,11 +472,11 @@ class _BookingScreenState extends State<BookingScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFD9E8F5)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 4),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isExpanded: true,
-          hint: Text(hint, style: const TextStyle(color: Colors.grey)),
+          hint: Text(hint, style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 14))),
           value: value,
           items: items,
           onChanged: onChanged,

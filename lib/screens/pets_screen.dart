@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/screens/pet_detail_screen.dart';
+import 'package:pet_care/utils/responsive.dart';
+import 'package:shimmer/shimmer.dart';
 
 class PetsScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -186,15 +188,15 @@ class _PetsScreenState extends State<PetsScreen> {
               _buildPetRegistrationSection()
             else
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                padding: EdgeInsets.symmetric(horizontal: R.hPad(context) + 4, vertical: 10.0),
                 child: ElevatedButton.icon(
                   onPressed: () => setState(() => _showRegistrationForm = true),
                   icon: const Icon(Icons.add),
-                  label: const Text('Thêm thú cưng'),
+                  label: Text('Thêm thú cưng', style: TextStyle(fontSize: R.sp(context, 14))),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF07E2B),
                     foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 50),
+                    minimumSize: Size(double.infinity, R.isSmall(context) ? 46 : 50),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -219,20 +221,46 @@ class _PetsScreenState extends State<PetsScreen> {
 
   Widget _buildPetListSection() {
     if (_isLoadingPets) {
-      return const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Color(0xFFF07E2B)));
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Thú Cưng Của Tôi', style: TextStyle(fontSize: R.sp(context, 21), fontWeight: FontWeight.bold, color: const Color(0xFF0F2E53))),
+            const SizedBox(height: 20),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 3,
+              itemBuilder: (_, __) => Shimmer.fromColors(
+                baseColor: Colors.grey.shade200,
+                highlightColor: Colors.grey.shade50,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     }
     if (_pets.isEmpty) {
        return const Padding(padding: EdgeInsets.all(20), child: Text('Bạn chưa có thú cưng nào. Hãy thêm ngay!'));
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Thú Cưng Của Tôi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53))),
+          Text('Thú Cưng Của Tôi', style: TextStyle(fontSize: R.sp(context, 21), fontWeight: FontWeight.bold, color: const Color(0xFF0F2E53))),
           const SizedBox(height: 4),
-          Text('${_pets.length} thú cưng', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text('${_pets.length} thú cưng', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 12))),
           const SizedBox(height: 16),
           ListView.builder(
             shrinkWrap: true,
@@ -267,13 +295,13 @@ class _PetsScreenState extends State<PetsScreen> {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
                     child: Row(
                       children: [
                         // Avatar
                         Container(
-                          width: 72,
-                          height: 72,
+                          width: R.isSmall(context) ? 62 : 72,
+                          height: R.isSmall(context) ? 62 : 72,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.white,
@@ -296,7 +324,7 @@ class _PetsScreenState extends State<PetsScreen> {
                                 children: [
                                   Text(
                                     pet['name'] ?? '',
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2E53)),
+                                    style: TextStyle(fontSize: R.sp(context, 16), fontWeight: FontWeight.bold, color: const Color(0xFF0F2E53)),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
@@ -357,13 +385,14 @@ class _PetsScreenState extends State<PetsScreen> {
         controller: controller,
         keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
         maxLines: maxLines,
+        style: TextStyle(fontSize: R.sp(context, 14)),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+          hintStyle: TextStyle(color: const Color(0xFF9CA3AF), fontSize: R.sp(context, 13)),
           filled: true,
           fillColor: const Color(0xFFDFDACB),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: R.isSmall(context) ? 11 : 14),
         ),
       ),
     );
@@ -371,15 +400,15 @@ class _PetsScreenState extends State<PetsScreen> {
 
   Widget _buildDropdown(String hint, Map<String, String> items, String? value, ValueChanged<String?> onChanged) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: R.isSmall(context) ? 10 : 12),
       child: DropdownButtonFormField<String>(
         decoration: InputDecoration(
           filled: true,
           fillColor: const Color(0xFFDFDACB),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: R.isSmall(context) ? 11 : 14),
         ),
-        hint: Text(hint, style: const TextStyle(color: Color(0xFF4B5563))),
+        hint: Text(hint, style: TextStyle(color: const Color(0xFF4B5563), fontSize: R.sp(context, 13))),
         value: value,
         items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
         onChanged: onChanged,
@@ -389,8 +418,8 @@ class _PetsScreenState extends State<PetsScreen> {
 
   Widget _buildPetRegistrationSection() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      padding: const EdgeInsets.all(20),
+      margin: EdgeInsets.symmetric(horizontal: R.hPad(context) + 4, vertical: 10),
+      padding: EdgeInsets.all(R.isSmall(context) ? 16 : 20),
       decoration: BoxDecoration(
         color: const Color(0xFFEBE6D6),
         borderRadius: BorderRadius.circular(16),
@@ -401,12 +430,12 @@ class _PetsScreenState extends State<PetsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Đăng ký thú cưng', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+              Text('Đăng ký thú cưng', style: TextStyle(fontSize: R.sp(context, 20), fontWeight: FontWeight.bold, color: const Color(0xFF0F4C81))),
               IconButton(icon: const Icon(Icons.close, color: Color(0xFF4B5563)), onPressed: () => setState(() => _showRegistrationForm = false)),
             ],
           ),
           const SizedBox(height: 8),
-          const Text('Điền các thông tin cơ bản của thú cưng, phục vụ cho việc cá nhân hóa hồ sơ với từng thú cưng.', style: TextStyle(color: Color(0xFF4B5563), fontSize: 14)),
+          Text('Điền các thông tin cơ bản của thú cưng, phục vụ cho việc cá nhân hóa hồ sơ với từng thú cưng.', style: TextStyle(color: const Color(0xFF4B5563), fontSize: R.sp(context, 13))),
           const SizedBox(height: 20),
           
           _buildTextField('Tên thú cưng *', controller: _petNameController),
@@ -488,7 +517,7 @@ class _PetsScreenState extends State<PetsScreen> {
           CheckboxListTile(
             value: _isSpayed,
             onChanged: (v) => setState(() => _isSpayed = v ?? false),
-            title: const Text('Đã triệt sản', style: TextStyle(fontSize: 14, color: Color(0xFF4B5563))),
+            title: Text('Đã triệt sản', style: TextStyle(fontSize: R.sp(context, 13), color: const Color(0xFF4B5563))),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             dense: true,
@@ -496,7 +525,7 @@ class _PetsScreenState extends State<PetsScreen> {
           CheckboxListTile(
             value: _isConfirmed,
             onChanged: (v) => setState(() => _isConfirmed = v ?? false),
-            title: const Text('Tôi xác nhận thông tin cung cấp là chính xác', style: TextStyle(fontSize: 14, color: Color(0xFF4B5563))),
+            title: Text('Tôi xác nhận thông tin cung cấp là chính xác', style: TextStyle(fontSize: R.sp(context, 13), color: const Color(0xFF4B5563))),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             dense: true,
@@ -504,7 +533,7 @@ class _PetsScreenState extends State<PetsScreen> {
           CheckboxListTile(
             value: _isAgreedToTerms,
             onChanged: (v) => setState(() => _isAgreedToTerms = v ?? false),
-            title: const Text('Tôi đồng ý với Điều khoản sử dụng & Chính sách bảo mật', style: TextStyle(fontSize: 14, color: Color(0xFF4B5563))),
+            title: Text('Tôi đồng ý với Điều khoản sử dụng & Chính sách bảo mật', style: TextStyle(fontSize: R.sp(context, 13), color: const Color(0xFF4B5563))),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             dense: true,
@@ -519,12 +548,12 @@ class _PetsScreenState extends State<PetsScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFDFDACB),
                     foregroundColor: const Color(0xFF0F4C81),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 13 : 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: Color(0xFF0F4C81))),
                   ),
                   child: _isAddingPet
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Tạo hồ sơ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      : Text('Tạo hồ sơ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 15))),
                 ),
               ),
               const SizedBox(width: 12),
@@ -534,10 +563,10 @@ class _PetsScreenState extends State<PetsScreen> {
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF4B5563),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 13 : 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Hủy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: Text('Hủy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 15))),
                 ),
               ),
             ],

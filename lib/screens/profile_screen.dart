@@ -366,11 +366,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        if (_user?['token'] != null) await AuthService().logout(_user!['token']);
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.remove('userInfo');
-                        if (!mounted) return;
-                        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Xác nhận đăng xuất'),
+                            content: const Text('Bạn có chắc chắn muốn đăng xuất không?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Không'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
+                          ),
+                        );
+                        
+                        if (confirm == true) {
+                          if (_user?['token'] != null) await AuthService().logout(_user!['token']);
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.remove('userInfo');
+                          if (!mounted) return;
+                          Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+                        }
                       },
                       icon: Icon(Icons.logout, size: R.iconSm(context)),
                       label: Text('Đăng Xuất', style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold)),

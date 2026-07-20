@@ -30,7 +30,50 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       final data = await BookingService().getAppointments(widget.user['token']);
       if (mounted) {
         setState(() {
-          _appointments = data;
+          _appointments = List.from(data);
+          
+          // Sắp xếp giảm dần (mới nhất lên trên) theo ngày và giờ
+          _appointments.sort((a, b) {
+            DateTime aDate = DateTime.tryParse(a['date']?.toString() ?? '') ?? DateTime.now();
+            DateTime bDate = DateTime.tryParse(b['date']?.toString() ?? '') ?? DateTime.now();
+            
+            String aTime = '';
+            if (a['timeSlot'] != null && a['timeSlot'] is Map) {
+              aTime = a['timeSlot']['startTime'] ?? '';
+            } else {
+              aTime = a['startTime'] ?? '';
+            }
+            String bTime = '';
+            if (b['timeSlot'] != null && b['timeSlot'] is Map) {
+              bTime = b['timeSlot']['startTime'] ?? '';
+            } else {
+              bTime = b['startTime'] ?? '';
+            }
+
+            if (aTime.isNotEmpty && aTime.contains(':')) {
+              final parts = aTime.split(':');
+              if (parts.length >= 2) {
+                int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                if (aTime.toLowerCase().contains('pm') && h < 12) h += 12;
+                if (aTime.toLowerCase().contains('am') && h == 12) h = 0;
+                aDate = DateTime(aDate.year, aDate.month, aDate.day, h, m);
+              }
+            }
+            if (bTime.isNotEmpty && bTime.contains(':')) {
+              final parts = bTime.split(':');
+              if (parts.length >= 2) {
+                int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                if (bTime.toLowerCase().contains('pm') && h < 12) h += 12;
+                if (bTime.toLowerCase().contains('am') && h == 12) h = 0;
+                bDate = DateTime(bDate.year, bDate.month, bDate.day, h, m);
+              }
+            }
+            
+            return bDate.compareTo(aDate);
+          });
+          
           _isLoading = false;
         });
       }
@@ -118,9 +161,28 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       statusText = 'Đã hủy';
                     }
 
-                    return Card(
-                      margin: EdgeInsets.only(bottom: R.isSmall(context) ? 12 : 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    final petIdStr = (appt['pet'] is Map) ? (appt['pet']['_id'] ?? appt['pet']['id']) : ((appt['petId'] is Map) ? (appt['petId']['_id'] ?? appt['petId']['id']) : (appt['petId'] ?? appt['pet']));
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        if (petIdStr != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => PetDetailScreen(
+                                petId: petIdStr.toString(),
+                                user: widget.user,
+                              ),
+                            ),
+                          ).then((_) {
+                            setState(() => _isLoading = true);
+                            _fetchAppointments();
+                          });
+                        }
+                      },
+                      child: Card(
+                        margin: EdgeInsets.only(bottom: R.isSmall(context) ? 12 : 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: Padding(
                         padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
                         child: Column(
@@ -250,8 +312,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                           ],
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  );
+                },
                 );
 
     final fab = FloatingActionButton.extended(

@@ -384,7 +384,7 @@ class _CartScreenState extends State<CartScreen> {
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               ),
-                              child: Text('TIẾN HÀNH THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
+                              child: Text('TIẾN HÀNH ĐẶT HÀNG', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
                             ),
                           ),
                         ],

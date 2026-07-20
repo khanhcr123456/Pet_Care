@@ -875,6 +875,25 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                               try {
                                 final apptId = appt['_id'] ?? appt['id'];
                                 await BookingService().updateAppointmentStatus(widget.user['token'], apptId, newStatus);
+                                
+                                // --- THÊM TÍNH NĂNG THÔNG BÁO ---
+                                if (newStatus == 'đã_xác_nhận') {
+                                  final String ownerId = (appt['user'] is Map) ? (appt['user']['_id'] ?? appt['user']['id'])?.toString() ?? '' : ((appt['userId'] is Map) ? (appt['userId']['_id'] ?? appt['userId']['id'])?.toString() ?? '' : (appt['userId'] ?? appt['user'])?.toString() ?? '');
+                                  final petName = _pet?['name'] ?? ((appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : 'Thú cưng');
+                                  if (ownerId.isNotEmpty) {
+                                    try {
+                                      await BookingService().sendPushNotification(
+                                        token: widget.user['token'],
+                                        userId: ownerId,
+                                        title: 'Lịch hẹn được xác nhận!',
+                                        body: 'Bác sĩ đã xác nhận lịch hẹn cho bé $petName.',
+                                        data: {'appointmentId': apptId.toString(), 'status': newStatus},
+                                      );
+                                    } catch (_) {}
+                                  }
+                                }
+                                // ---------------------------------
+                                
                                 if (!mounted) return;
                                 // Update state locally — no need for full reload
                                 setState(() {
@@ -1515,6 +1534,21 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         await BookingService().addVaccination(widget.user['token'], payload);
                         await BookingService().updateAppointmentStatus(widget.user['token'], apptId, 'hoàn_thành');
                         
+                        // Thông báo khi hoàn thành tiêm phòng
+                        final String ownerId = (appt['user'] is Map) ? (appt['user']['_id'] ?? appt['user']['id'])?.toString() ?? '' : ((appt['userId'] is Map) ? (appt['userId']['_id'] ?? appt['userId']['id'])?.toString() ?? '' : (appt['userId'] ?? appt['user'])?.toString() ?? '');
+                        final petName = _pet?['name'] ?? ((appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : 'Thú cưng');
+                        if (ownerId.isNotEmpty) {
+                          try {
+                            await BookingService().sendPushNotification(
+                              token: widget.user['token'],
+                              userId: ownerId,
+                              title: 'Đã hoàn tất tiêm phòng',
+                              body: 'Bác sĩ đã cập nhật mũi tiêm cho bé $petName.',
+                              data: {'appointmentId': apptId.toString(), 'status': 'hoàn_thành'},
+                            );
+                          } catch (_) {}
+                        }
+
                         if (!mounted) return;
                         Navigator.pop(context); // Close loading
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu kết quả tiêm phòng')));
@@ -1721,7 +1755,22 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                   Future.wait([
                     BookingService().addHealthRecord(widget.user['token'], payload, imagePaths: snappedPaths),
                     BookingService().updateAppointmentStatus(widget.user['token'], apptId, 'ho\u00e0n_th\u00e0nh'),
-                  ]).then((results) {
+                  ]).then((results) async {
+                    // Thông báo khám bệnh hoàn thành
+                    final String ownerId = (appt['user'] is Map) ? (appt['user']['_id'] ?? appt['user']['id'])?.toString() ?? '' : ((appt['userId'] is Map) ? (appt['userId']['_id'] ?? appt['userId']['id'])?.toString() ?? '' : (appt['userId'] ?? appt['user'])?.toString() ?? '');
+                    final petName = _pet?['name'] ?? ((appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : 'Thú cưng');
+                    if (ownerId.isNotEmpty) {
+                      try {
+                        await BookingService().sendPushNotification(
+                          token: widget.user['token'],
+                          userId: ownerId,
+                          title: 'Đã có kết quả khám',
+                          body: 'Bác sĩ đã cập nhật kết quả khám của bé $petName.',
+                          data: {'appointmentId': apptId.toString(), 'status': 'hoàn_thành'},
+                        );
+                      } catch (_) {}
+                    }
+
                     if (!mounted) return;
                     final newHrId = results[0] as String?;
                     ScaffoldMessenger.of(context).showSnackBar(

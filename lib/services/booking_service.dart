@@ -264,4 +264,32 @@ class BookingService {
       throw Exception('Failed to load health record: ${response.body}');
     }
   }
+
+  // --- THÊM MỚI: GỌI API GỬI THÔNG BÁO ---
+  Future<void> sendPushNotification({
+    required String token,
+    required String userId,
+    required String title,
+    required String body,
+    Map<String, dynamic>? data,
+  }) async {
+    final response = await http.post(
+      // Chú ý: dùng AppConfig.baseUrl để luôn đồng bộ URL đang cấu hình (Pawrent Vercel)
+      Uri.parse('${AppConfig.baseUrl}/firebase/send-notification'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: json.encode({
+        'userId': userId,
+        'title': title,
+        'body': body,
+        if (data != null) 'data': data,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Lỗi gửi thông báo FCM: ${response.body}');
+    }
+  }
 }

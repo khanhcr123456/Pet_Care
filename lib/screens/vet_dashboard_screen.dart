@@ -161,7 +161,23 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
           ),
         ],
       ),
-      body: _buildContentForIndex(_selectedIndex),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          _buildDashboard(),
+          _buildAppointmentsList(),
+          _buildAllPetsList(),
+          _buildSchedule(),
+          ProfileScreen(
+            user: _currentUser,
+            onUserUpdated: (updatedUser) {
+              setState(() {
+                _currentUser = updatedUser;
+              });
+            },
+          ),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
@@ -186,58 +202,6 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
     );
   }
 
-  Widget _buildContentForIndex(int index) {
-    if (index == 0) {
-      return _buildDashboard();
-    }
-    if (index == 1) {
-      return _buildAppointmentsList();
-    }
-    if (index == 2) {
-      return _buildAllPetsList();
-    }
-    if (index == 3) {
-      return _buildSchedule();
-    }
-    if (index == 4) {
-      return ProfileScreen(
-        user: _currentUser,
-        onUserUpdated: (updatedUser) {
-          setState(() {
-            _currentUser = updatedUser;
-          });
-        },
-      );
-    }
-
-    // Add title banner before content for other tabs
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 12),
-          color: const Color(0xFFF5F6FA),
-          child: Text(
-            _menuItems[index]['title'],
-            style: TextStyle(
-              fontSize: R.sp(context, 18),
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F2E53),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Center(
-            child: Text(
-              '${_menuItems[index]['title']} Content',
-              style: const TextStyle(color: Colors.grey),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSchedule() {
     final daysInMonth = DateUtils.getDaysInMonth(_currentMonthSchedule.year, _currentMonthSchedule.month);
     final firstDayOffset = _currentMonthSchedule.weekday % 7; // Sunday=0, Monday=1...
@@ -249,6 +213,47 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
       if (aDate == null) return false;
       return DateFormat('yyyy-MM-dd').format(aDate) == dateStr;
     }).toList();
+    
+    dayApps.sort((a, b) {
+      DateTime aDate = DateTime.tryParse(a['date'].toString()) ?? DateTime.now();
+      DateTime bDate = DateTime.tryParse(b['date'].toString()) ?? DateTime.now();
+      
+      String aTime = '';
+      if (a['timeSlot'] != null && a['timeSlot'] is Map) {
+        aTime = a['timeSlot']['startTime'] ?? '';
+      } else {
+        aTime = a['startTime'] ?? '';
+      }
+      String bTime = '';
+      if (b['timeSlot'] != null && b['timeSlot'] is Map) {
+        bTime = b['timeSlot']['startTime'] ?? '';
+      } else {
+        bTime = b['startTime'] ?? '';
+      }
+
+      if (aTime.isNotEmpty && aTime.contains(':')) {
+        final parts = aTime.split(':');
+        if (parts.length >= 2) {
+          int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          if (aTime.toLowerCase().contains('pm') && h < 12) h += 12;
+          if (aTime.toLowerCase().contains('am') && h == 12) h = 0;
+          aDate = DateTime(aDate.year, aDate.month, aDate.day, h, m);
+        }
+      }
+      if (bTime.isNotEmpty && bTime.contains(':')) {
+        final parts = bTime.split(':');
+        if (parts.length >= 2) {
+          int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          if (bTime.toLowerCase().contains('pm') && h < 12) h += 12;
+          if (bTime.toLowerCase().contains('am') && h == 12) h = 0;
+          bDate = DateTime(bDate.year, bDate.month, bDate.day, h, m);
+        }
+      }
+      
+      return bDate.compareTo(aDate);
+    });
 
     return SingleChildScrollView(
       child: Column(
@@ -425,11 +430,30 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                             else if (statusStr == 'hoàn_thành') statusDisplay = 'Hoàn thành';
                             else if (statusStr == 'đã_hủy') statusDisplay = 'Đã hủy';
 
-                            return Container(
-                              margin: EdgeInsets.only(bottom: 12),
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
+                            final petIdStr = (app['pet'] is Map) ? (app['pet']['_id'] ?? app['pet']['id']) : ((app['petId'] is Map) ? (app['petId']['_id'] ?? app['petId']['id']) : (app['petId'] ?? app['pet']));
+                            
+                            return GestureDetector(
+                              onTap: () {
+                                if (petIdStr != null && _currentUser != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PetDetailScreen(
+                                        petId: petIdStr.toString(),
+                                        user: _currentUser!,
+                                      ),
+                                    ),
+                                  ).then((_) {
+                                    setState(() => _isLoading = true);
+                                    _fetchAppointments();
+                                  });
+                                }
+                              },
+                              child: Container(
+                                margin: EdgeInsets.only(bottom: 12),
+                                padding: EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: Colors.grey.shade100),
                                 boxShadow: [
@@ -459,8 +483,9 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                                   ),
                                 ],
                               ),
-                            );
-                          },
+                            ),
+                          );
+                        },
                     ),
               ],
             ),
@@ -617,9 +642,44 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
     }).toList();
     
     todayApps.sort((a, b) {
-      final aDate = DateTime.tryParse(a['date'].toString()) ?? DateTime.now();
-      final bDate = DateTime.tryParse(b['date'].toString()) ?? DateTime.now();
-      return aDate.compareTo(bDate);
+      DateTime aDate = DateTime.tryParse(a['date'].toString()) ?? DateTime.now();
+      DateTime bDate = DateTime.tryParse(b['date'].toString()) ?? DateTime.now();
+      
+      String aTime = '';
+      if (a['timeSlot'] != null && a['timeSlot'] is Map) {
+        aTime = a['timeSlot']['startTime'] ?? '';
+      } else {
+        aTime = a['startTime'] ?? '';
+      }
+      String bTime = '';
+      if (b['timeSlot'] != null && b['timeSlot'] is Map) {
+        bTime = b['timeSlot']['startTime'] ?? '';
+      } else {
+        bTime = b['startTime'] ?? '';
+      }
+
+      if (aTime.isNotEmpty && aTime.contains(':')) {
+        final parts = aTime.split(':');
+        if (parts.length >= 2) {
+          int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          if (aTime.toLowerCase().contains('pm') && h < 12) h += 12;
+          if (aTime.toLowerCase().contains('am') && h == 12) h = 0;
+          aDate = DateTime(aDate.year, aDate.month, aDate.day, h, m);
+        }
+      }
+      if (bTime.isNotEmpty && bTime.contains(':')) {
+        final parts = bTime.split(':');
+        if (parts.length >= 2) {
+          int h = int.tryParse(parts[0].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          int m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          if (bTime.toLowerCase().contains('pm') && h < 12) h += 12;
+          if (bTime.toLowerCase().contains('am') && h == 12) h = 0;
+          bDate = DateTime(bDate.year, bDate.month, bDate.day, h, m);
+        }
+      }
+      
+      return bDate.compareTo(aDate);
     });
     
     return todayApps;
@@ -1021,6 +1081,30 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                         try {
                           final apptId = appt['_id'] ?? appt['id'];
                           await BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, newStatus);
+
+                          // --- THÊM TÍNH NĂNG THÔNG BÁO ---
+                          if (newStatus == 'đã_xác_nhận') {
+                            final String ownerId = (appt['user'] is Map)
+                                ? (appt['user']['_id'] ?? appt['user']['id'])?.toString() ?? ''
+                                : ((appt['userId'] is Map)
+                                    ? (appt['userId']['_id'] ?? appt['userId']['id'])?.toString() ?? ''
+                                    : (appt['userId'] ?? appt['user'])?.toString() ?? '');
+
+                            if (ownerId.isNotEmpty) {
+                              try {
+                                await BookingService().sendPushNotification(
+                                  token: _currentUser!['token'],
+                                  userId: ownerId,
+                                  title: 'Lịch hẹn được xác nhận!',
+                                  body: 'Xin chào $ownerName, bác sĩ đã xác nhận lịch hẹn cho bé $petName. Xin cảm ơn!',
+                                  data: {'appointmentId': apptId.toString(), 'status': newStatus},
+                                );
+                              } catch (e) {
+                                debugPrint('Lỗi gửi FCM từ Vet: $e');
+                              }
+                            }
+                          }
+                          // ---------------------------------
                           if (!mounted) return;
                           
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật trạng thái thành công')));
@@ -1314,6 +1398,22 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                         await BookingService().addVaccination(_currentUser!['token'], payload);
                         await BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, 'hoàn_thành');
                         
+                        // Thông báo khi hoàn thành tiêm phòng
+                        final String ownerId = (appt['user'] is Map) ? (appt['user']['_id'] ?? appt['user']['id'])?.toString() ?? '' : ((appt['userId'] is Map) ? (appt['userId']['_id'] ?? appt['userId']['id'])?.toString() ?? '' : (appt['userId'] ?? appt['user'])?.toString() ?? '');
+                        final petName = (appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : ((appt['petId'] is Map) ? (appt['petId']['name'] ?? 'Thú cưng') : 'Thú cưng');
+                        final ownerName = (appt['user'] is Map) ? (appt['user']['fullName'] ?? appt['user']['name'] ?? 'Khách hàng') : ((appt['userId'] is Map) ? (appt['userId']['fullName'] ?? appt['userId']['name'] ?? 'Khách hàng') : 'Khách hàng');
+                        if (ownerId.isNotEmpty) {
+                          try {
+                            await BookingService().sendPushNotification(
+                              token: _currentUser!['token'],
+                              userId: ownerId,
+                              title: 'Đã hoàn tất tiêm phòng',
+                              body: 'Xin chào $ownerName, bác sĩ đã cập nhật mũi tiêm cho bé $petName.',
+                              data: {'appointmentId': apptId.toString(), 'status': 'hoàn_thành'},
+                            );
+                          } catch (_) {}
+                        }
+                        
                         if (!mounted) return;
                         Navigator.pop(context); // Close loading
                         
@@ -1529,7 +1629,23 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
                           Future.wait([
                             BookingService().addHealthRecord(_currentUser!['token'], payload, imagePaths: snappedPaths),
                             BookingService().updateAppointmentStatus(_currentUser!['token'], apptId, 'hoàn_thành'),
-                          ]).then((results) {
+                          ]).then((results) async {
+                            // Thông báo khi hoàn thành khám bệnh
+                            final String ownerId = (appt['user'] is Map) ? (appt['user']['_id'] ?? appt['user']['id'])?.toString() ?? '' : ((appt['userId'] is Map) ? (appt['userId']['_id'] ?? appt['userId']['id'])?.toString() ?? '' : (appt['userId'] ?? appt['user'])?.toString() ?? '');
+                            final petName = (appt['pet'] is Map) ? (appt['pet']['name'] ?? 'Thú cưng') : ((appt['petId'] is Map) ? (appt['petId']['name'] ?? 'Thú cưng') : 'Thú cưng');
+                            final ownerName = (appt['user'] is Map) ? (appt['user']['fullName'] ?? appt['user']['name'] ?? 'Khách hàng') : ((appt['userId'] is Map) ? (appt['userId']['fullName'] ?? appt['userId']['name'] ?? 'Khách hàng') : 'Khách hàng');
+                            if (ownerId.isNotEmpty) {
+                              try {
+                                await BookingService().sendPushNotification(
+                                  token: _currentUser!['token'],
+                                  userId: ownerId,
+                                  title: 'Đã có kết quả khám',
+                                  body: 'Xin chào $ownerName, bác sĩ đã cập nhật kết quả khám của bé $petName.',
+                                  data: {'appointmentId': apptId.toString(), 'status': 'hoàn_thành'},
+                                );
+                              } catch (_) {}
+                            }
+
                             if (!mounted) return;
                             setState(() => _isLoading = true);
                             _fetchAppointments();

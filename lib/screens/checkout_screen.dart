@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:pet_care/services/invoice_service.dart';
 import 'package:pet_care/services/product_service.dart';
 import 'package:pet_care/screens/purchase_history_screen.dart';
@@ -28,6 +29,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   
   final num _shippingFee = 30000;
   bool _isProcessing = false;
+  
+  bool _nameError = false;
+  String? _phoneErrorMsg;
+  bool _addressError = false;
 
   @override
   void initState() {
@@ -60,8 +65,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _placeOrder() async {
-    if (_nameController.text.trim().isEmpty || _phoneController.text.trim().isEmpty || _addressController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin nhận hàng')));
+    final phoneText = _phoneController.text.trim();
+    String? phoneError;
+    if (phoneText.isEmpty) {
+      phoneError = 'Vui lòng nhập số điện thoại';
+    } else if (!RegExp(r'^(03|05|07|08|09)\d{8}$').hasMatch(phoneText)) {
+      phoneError = 'Số điện thoại không hợp lệ';
+    }
+
+    setState(() {
+      _nameError = _nameController.text.trim().isEmpty;
+      _phoneErrorMsg = phoneError;
+      _addressError = _addressController.text.trim().isEmpty;
+    });
+
+    if (_nameError || _phoneErrorMsg != null || _addressError) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng kiểm tra lại thông tin nhận hàng')));
       return;
     }
 
@@ -69,20 +88,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       final invoiceData = {
-        'receiverName': _nameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-        'paymentMethod': _selectedPaymentMethod,
-        'shippingFee': _shippingFee,
-        'totalAmount': widget.totalAmount + _shippingFee,
         'products': widget.selectedItems.map((item) {
           final product = item['product'] ?? {};
           return {
             'productId': product['_id'] ?? product['id'],
             'quantity': item['quantity'] ?? 1,
-            'price': product['price'] ?? 0,
           };
         }).toList(),
+        'currency': 'VND',
+        'address': _addressController.text.trim(),
+        'recipientPhone': _phoneController.text.trim(),
+        'recipientName': _nameController.text.trim(),
+        'dueDate': DateTime.now().toIso8601String().split('T')[0],
+        'paymentMethod': _selectedPaymentMethod,
       };
 
       final invoiceRes = await InvoiceService().createProductInvoice(widget.user['token'], invoiceData);
@@ -121,9 +139,51 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => PurchaseHistoryScreen(user: widget.user)));
+                    onPressed: () async {
+                      final invoiceIdObj = invoiceRes['data'] != null ? invoiceRes['data']['_id'] ?? invoiceRes['data']['id'] : invoiceRes['_id'] ?? invoiceRes['id'];
+                      final invoiceId = invoiceIdObj?.toString() ?? '';
+                      if (invoiceId.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy mã đơn hàng. Vui lòng vào Lịch sử để thanh toán.')));
+                        return;
+                      }
+
+                      showDialog(context: context, barrierDismissible: false, builder: (ctx) => const Center(child: CircularProgressIndicator()));
+                      try {
+                        final res = await InvoiceService().initSepayCheckout(widget.user['token'], invoiceId);
+                        if (!mounted) return;
+                        Navigator.pop(context); // close loading
+                        
+                        final paymentData = (res['data'] is Map) ? res['data'] : res;
+                        String? paymentUrl = res['checkoutPageUrl'] ?? res['url'] ?? paymentData['checkoutPageUrl'] ?? paymentData['url'] ?? paymentData['paymentUrl'];
+                        
+                        if (paymentUrl != null && paymentUrl.isNotEmpty) {
+                           await Navigator.push(
+                             context,
+                             MaterialPageRoute(
+                               builder: (context) => Scaffold(
+                                 appBar: AppBar(
+                                   title: const Text('Cổng thanh toán', style: TextStyle(color: Colors.white)),
+                                   backgroundColor: const Color(0xFF0F2E53),
+                                   leading: IconButton(
+                                     icon: const Icon(Icons.close, color: Colors.white),
+                                     onPressed: () => Navigator.pop(context),
+                                   ),
+                                 ),
+                                 body: _WebViewLoader(url: paymentUrl),
+                               ),
+                             )
+                           );
+                           if (!mounted) return;
+                           Navigator.of(context).popUntil((route) => route.isFirst);
+                           Navigator.push(context, MaterialPageRoute(builder: (_) => PurchaseHistoryScreen(user: widget.user)));
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không tìm thấy link thanh toán (checkoutPageUrl). Vui lòng thử lại sau.')));
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi tải thanh toán: ${e.toString().replaceAll('Exception: ', '')}')));
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFF07E2B),
@@ -225,7 +285,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       backgroundColor: const Color(0xFFF6FAFD),
       appBar: AppBar(
         title: Text(
-          'Thanh toán',
+          'Đặt hàng',
           style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 18)),
         ),
         backgroundColor: Colors.white,
@@ -251,9 +311,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 children: [
                   TextField(
                     controller: _nameController,
+                    onChanged: (_) {
+                      if (_nameError) setState(() => _nameError = false);
+                    },
                     style: TextStyle(fontSize: R.sp(context, 14)),
                     decoration: InputDecoration(
                       labelText: 'Họ và tên',
+                      errorText: _nameError ? 'Vui lòng nhập họ và tên' : null,
                       labelStyle: TextStyle(fontSize: R.sp(context, 13)),
                       prefixIcon: const Icon(Icons.person, color: Colors.grey),
                     ),
@@ -262,9 +326,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   TextField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    onChanged: (_) {
+                      if (_phoneErrorMsg != null) setState(() => _phoneErrorMsg = null);
+                    },
                     style: TextStyle(fontSize: R.sp(context, 14)),
                     decoration: InputDecoration(
                       labelText: 'Số điện thoại',
+                      errorText: _phoneErrorMsg,
                       labelStyle: TextStyle(fontSize: R.sp(context, 13)),
                       prefixIcon: const Icon(Icons.phone, color: Colors.grey),
                     ),
@@ -274,9 +342,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     controller: _addressController,
                     minLines: 1,
                     maxLines: null,
+                    onChanged: (_) {
+                      if (_addressError) setState(() => _addressError = false);
+                    },
                     style: TextStyle(fontSize: R.sp(context, 14)),
                     decoration: InputDecoration(
                       labelText: 'Địa chỉ giao hàng',
+                      errorText: _addressError ? 'Vui lòng nhập địa chỉ' : null,
                       labelStyle: TextStyle(fontSize: R.sp(context, 13)),
                       prefixIcon: const Icon(Icons.location_on, color: Colors.grey),
                       alignLabelWithHint: true,
@@ -465,5 +537,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       ),
     );
+  }
+}
+
+class _WebViewLoader extends StatefulWidget {
+  final String url;
+  const _WebViewLoader({required this.url});
+  @override
+  State<_WebViewLoader> createState() => _WebViewLoaderState();
+}
+
+class _WebViewLoaderState extends State<_WebViewLoader> {
+  late final WebViewController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            if (request.url.startsWith('https://petcare.app.vn/payment/')) {
+              Navigator.pop(context, true);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.url));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WebViewWidget(controller: controller);
   }
 }

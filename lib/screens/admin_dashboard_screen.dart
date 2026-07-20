@@ -12,6 +12,9 @@ import 'package:pet_care/screens/login_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pet_care/screens/admin_users_tab.dart';
+import 'package:pet_care/services/remote_config_service.dart';
+import 'package:pet_care/services/analytics_service.dart';
+import 'package:pet_care/screens/admin_firebase_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -30,6 +33,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void initState() {
     super.initState();
     _currentUser = widget.user;
+    AnalyticsService().logScreenView('AdminDashboardScreen');
     _fetchCurrentUser();
   }
 
@@ -51,13 +55,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6FAFD),
-      appBar: AppBar(
-        title: const Text('Admin Dashboard', style: TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+    return ListenableBuilder(
+      listenable: RemoteConfigService(),
+      builder: (context, _) {
+        final String theme = RemoteConfigService().themeEvent.toUpperCase();
+        final bool isNoel = theme == 'NOEL';
+        final bool isTet = theme == 'TET' || theme == 'TẾT';
+        final bool isHalloween = theme == 'HALLOWEEN';
+        
+        String titleStr = 'Admin Dashboard';
+        if (isNoel) titleStr += ' ❄️';
+        if (isTet) titleStr += ' 🧧';
+        if (isHalloween) titleStr += ' 🎃';
+        
+        Color themeColor = const Color(0xFFF07E2B);
+        if (isNoel) themeColor = Colors.lightBlue;
+        if (isTet) themeColor = Colors.red;
+        if (isHalloween) themeColor = Colors.deepOrange;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF6FAFD),
+          appBar: AppBar(
+            title: Text(titleStr, style: TextStyle(color: themeColor, fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.white,
         elevation: 1,
         actions: [
+          const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: Center(
@@ -87,31 +110,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
-        selectedItemColor: const Color(0xFFF07E2B),
+        onTap: (i) {
+          setState(() => _currentIndex = i);
+          final screens = ['AdminFirebaseScreen', 'AdminServicesTab', 'AdminProductsTab', 'AdminOrdersTab', 'ProfileScreen'];
+          AnalyticsService().logScreenView(screens[i]);
+        },
+        selectedItemColor: themeColor,
         unselectedItemColor: Colors.grey,
         selectedFontSize: 12,
         unselectedFontSize: 11,
         type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.medical_services), label: 'Dịch vụ'),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Sản phẩm'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Người dùng'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Tài khoản'),
+        items: [
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.dashboard_customize : (isTet ? Icons.festival : (isHalloween ? Icons.hardware : Icons.dashboard))), label: 'Dashboard'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.star : (isTet ? Icons.local_fire_department : (isHalloween ? Icons.coronavirus : Icons.medical_services))), label: 'Dịch vụ'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.card_giftcard : (isTet ? Icons.redeem : (isHalloween ? Icons.cookie : Icons.inventory_2))), label: 'Sản phẩm'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.park : (isTet ? Icons.receipt : (isHalloween ? Icons.receipt_long : Icons.receipt_long))), label: 'Đơn hàng'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.snowshoeing : (isTet ? Icons.accessibility_new : (isHalloween ? Icons.face_2 : Icons.person))), label: 'Tài khoản'),
         ],
       ),
     );
+    });
   }
 
   Widget _buildBody() {
     return IndexedStack(
       index: _currentIndex,
       children: [
+        // Tab 0: Trở thành Dashboard (Toàn bộ Firebase Screen)
+        AdminFirebaseScreen(user: widget.user),
+        // Các tab bị lùi lại 1 bậc
         AdminServicesTab(user: widget.user),
         AdminProductsTab(user: widget.user),
         AdminOrdersTab(user: widget.user),
-        AdminUsersTab(user: widget.user),
         ProfileScreen(
           user: _currentUser,
           onUserUpdated: (updatedUser) {

@@ -29,16 +29,16 @@ class AdminService {
   }
 
   Future<void> disableFirebaseUser(String token, String uid, bool disabled) async {
-    final response = await http.patch(
-      Uri.parse('${AppConfig.baseUrl}/firebase/users/$uid'),
+    final response = await http.put(
+      Uri.parse('${AppConfig.baseUrl}/firebase/users/$uid/status'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
       body: jsonEncode({'disabled': disabled}),
     );
-    if (response.statusCode != 200) {
-      throw Exception('Lỗi cập nhật trạng thái user: ${response.statusCode}');
+    if (response.statusCode != 200 && response.statusCode != 201 && response.statusCode != 204) {
+      throw Exception('Lỗi cập nhật trạng thái user: ${response.statusCode} - ${response.body}');
     }
   }
 
@@ -50,8 +50,8 @@ class AdminService {
         'Authorization': 'Bearer $token',
       },
     );
-    if (response.statusCode != 200) {
-      throw Exception('Lỗi xoá user: ${response.statusCode}');
+    if (response.statusCode != 200 && response.statusCode != 201 && response.statusCode != 204) {
+      throw Exception('Lỗi xoá user: ${response.statusCode} - ${response.body}');
     }
   }
 }

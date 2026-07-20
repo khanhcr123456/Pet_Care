@@ -10,6 +10,7 @@ import 'package:pet_care/screens/vet_dashboard_screen.dart';
 import 'package:pet_care/screens/admin_dashboard_screen.dart';
 import 'package:pet_care/utils/responsive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pet_care/services/analytics_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,6 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('userInfo', jsonEncode(userInfo));
+
+      final String? userId = userInfo['_id'] ?? userInfo['id'] ?? userInfo['user']?['_id'];
+      AnalyticsService().setUser(userId, role: userInfo['role']);
 
       if (!mounted) return;
       if (session.role == 'admin') {
@@ -159,6 +163,9 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('[GoogleLogin] userInfo: $userInfo');
 
       await prefs.setString('userInfo', jsonEncode(userInfo));
+      
+      final String? userId = userInfo['_id'] ?? userInfo['id'] ?? userInfo['user']?['_id'];
+      AnalyticsService().setUser(userId, role: userInfo['role']);
 
       if (!mounted) return;
       if (userInfo['role'] == 'admin') {

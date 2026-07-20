@@ -10,6 +10,8 @@ import 'package:pet_care/screens/store_screen.dart';
 import 'package:pet_care/screens/cart_screen.dart';
 import 'package:pet_care/screens/purchase_history_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
+import 'package:pet_care/services/remote_config_service.dart';
+import 'package:pet_care/services/analytics_service.dart';
 import 'package:pet_care/utils/responsive.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -28,37 +30,43 @@ class _LandingScreenState extends State<LandingScreen> {
   void initState() {
     super.initState();
     _currentUser = widget.user;
+    AnalyticsService().logScreenView('HomeScreen');
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            Icon(Icons.pets, color: const Color(0xFFF07E2B), size: R.iconMd(context)),
-            const SizedBox(width: 6),
-            RichText(
-              text: TextSpan(
-                style: TextStyle(fontSize: R.sp(context, 20), fontWeight: FontWeight.bold),
-                children: const [
-                  TextSpan(text: 'Paw', style: TextStyle(color: Color(0xFF0F2E53))),
-                  TextSpan(text: 'Rent', style: TextStyle(color: Color(0xFFF07E2B))),
-                ],
-              ),
+    return ListenableBuilder(
+      listenable: RemoteConfigService(),
+      builder: (context, _) {
+        final bool isNoel = RemoteConfigService().themeEvent == 'NOEL';
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            title: Row(
+              children: [
+                Icon(isNoel ? Icons.card_giftcard : Icons.pets, color: const Color(0xFFF07E2B), size: R.iconMd(context)),
+                const SizedBox(width: 6),
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(fontSize: R.sp(context, 20), fontWeight: FontWeight.bold),
+                    children: [
+                      const TextSpan(text: 'Paw', style: TextStyle(color: Color(0xFF0F2E53))),
+                      const TextSpan(text: 'Rent', style: TextStyle(color: Color(0xFFF07E2B))),
+                      if (isNoel) const TextSpan(text: ' 🎄', style: TextStyle(color: Color(0xFF0F2E53))),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreScreen(user: _currentUser))),
-            icon: const Icon(Icons.storefront, color: Color(0xFF0F2E53)),
-            tooltip: 'Cửa hàng',
-          ),
-          IconButton(
+            actions: [
+              IconButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => StoreScreen(user: _currentUser))),
+                icon: const Icon(Icons.storefront, color: Color(0xFF0F2E53)),
+                tooltip: 'Cửa hàng',
+              ),
+              IconButton(
             onPressed: () {
               if (_currentUser == null || _currentUser!['token'] == null) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng đăng nhập để xem giỏ hàng!')));
@@ -109,21 +117,26 @@ class _LandingScreenState extends State<LandingScreen> {
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (i) => setState(() => _selectedIndex = i),
+        onTap: (i) {
+          setState(() => _selectedIndex = i);
+          final screens = ['HomeScreen', 'ServicesScreen', 'PetsScreen', 'AppointmentsScreen', 'ProfileScreen'];
+          AnalyticsService().logScreenView(screens[i]);
+        },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFFF07E2B),
         unselectedItemColor: Colors.grey,
         selectedLabelStyle: TextStyle(fontSize: R.sp(context, 11), fontWeight: FontWeight.w600),
         unselectedLabelStyle: TextStyle(fontSize: R.sp(context, 11)),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(Icons.medical_services), label: 'Dịch vụ'),
-          BottomNavigationBarItem(icon: Icon(Icons.pets), label: 'Thú cưng'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Lịch khám'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Tài khoản'),
+        items: [
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.holiday_village : Icons.home), label: 'Trang chủ'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.star : Icons.medical_services), label: 'Dịch vụ'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.redeem : Icons.pets), label: 'Thú cưng'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.park : Icons.calendar_month), label: 'Lịch khám'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.ac_unit : Icons.person), label: 'Tài khoản'),
         ],
       ),
     );
+    }); // Đóng ListenableBuilder wrapper của Scaffold
   }
 
   Widget _buildBody() {
@@ -154,13 +167,27 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildHeroSection() {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
+    // BỌC LISTENABLE BUILDER ĐỂ TỰ ĐỘNG VẼ LẠI KHI CÓ DATA MỚI TỪ FIREBASE
+    return ListenableBuilder(
+      listenable: RemoteConfigService(),
+      builder: (context, _) {
+        final String theme = RemoteConfigService().themeEvent;
+        
+        // Tùy biến màu nền (Noel vẫn giữ nguyên sắc vàng nhận diện thương hiệu)
+        List<Color> bgColors;
+        if (theme == 'TET') {
+          bgColors = [const Color(0xFFFFCCCC), const Color(0xFFE60000)];
+        } else {
+          bgColors = [const Color(0xFFFFF9E6), const Color(0xFFFFD740)];
+        }
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFF9E6), Color(0xFFFFD740)],
+          colors: bgColors,
         ),
       ),
       padding: EdgeInsets.symmetric(
@@ -180,6 +207,20 @@ class _LandingScreenState extends State<LandingScreen> {
             ),
           ),
           SizedBox(height: R.isSmall(context) ? 20 : 28),
+          if (theme == 'NOEL')
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.ac_unit, color: Colors.blue, size: 24),
+                  SizedBox(width: 16),
+                  Icon(Icons.ac_unit, color: Colors.blue, size: 32),
+                  SizedBox(width: 16),
+                  Icon(Icons.ac_unit, color: Colors.blue, size: 24),
+                ],
+              ),
+            ),
           RichText(
             textAlign: TextAlign.center,
             text: TextSpan(
@@ -188,11 +229,18 @@ class _LandingScreenState extends State<LandingScreen> {
                 fontWeight: FontWeight.w900,
                 height: 1.3,
               ),
-              children: const [
-                TextSpan(text: 'An Toàn Cho ', style: TextStyle(color: Color(0xFF1F2937))),
-                TextSpan(text: '"Boss"\n', style: TextStyle(color: Color(0xFF0F2E53))),
-                TextSpan(text: 'An Tâm Cho ', style: TextStyle(color: Color(0xFF1F2937))),
-                TextSpan(text: '"Sen"', style: TextStyle(color: Color(0xFF0F2E53))),
+              children: [
+                if (theme == 'TET') ...[
+                  const TextSpan(text: 'Đón Năm Mới Cùng ', style: TextStyle(color: Colors.white)),
+                  const TextSpan(text: '"Boss"\n', style: TextStyle(color: Color(0xFFFFD740))),
+                  const TextSpan(text: 'Rước Lộc Cho ', style: TextStyle(color: Colors.white)),
+                  const TextSpan(text: '"Sen"', style: TextStyle(color: Color(0xFFFFD740))),
+                ] else ...[
+                  const TextSpan(text: 'An Toàn Cho ', style: TextStyle(color: Color(0xFF1F2937))),
+                  const TextSpan(text: '"Boss"\n', style: TextStyle(color: Color(0xFF0F2E53))),
+                  const TextSpan(text: 'An Tâm Cho ', style: TextStyle(color: Color(0xFF1F2937))),
+                  const TextSpan(text: '"Sen"', style: TextStyle(color: Color(0xFF0F2E53))),
+                ],
               ],
             ),
           ),
@@ -215,9 +263,9 @@ class _LandingScreenState extends State<LandingScreen> {
               }
               Navigator.push(context, MaterialPageRoute(builder: (_) => BookingScreen(user: _currentUser!)));
             },
-            icon: Icon(Icons.access_time, size: R.iconSm(context), color: const Color(0xFF0F2E53)),
+            icon: Icon(theme == 'NOEL' ? Icons.star : Icons.access_time, size: R.iconSm(context), color: const Color(0xFF0F2E53)),
             label: Text(
-              'Đặt lịch hẹn ngay',
+              theme == 'NOEL' ? 'Đặt lịch hẹn ngay 🎅' : 'Đặt lịch hẹn ngay',
               style: TextStyle(
                 color: const Color(0xFF0F2E53),
                 fontSize: R.sp(context, 15),
@@ -238,15 +286,20 @@ class _LandingScreenState extends State<LandingScreen> {
         ],
       ),
     );
+    }); // Nút đóng của ListenableBuilder
   }
 
   Widget _buildFeaturesSection() {
-    final features = [
-      {'icon': Icons.pets, 'title': 'Dịch vụ thú cưng', 'color': Colors.orange},
-      {'icon': Icons.book, 'title': 'Sổ điện tử', 'color': Colors.blue},
-      {'icon': Icons.calendar_month, 'title': 'Đặt lịch khám', 'color': Colors.purple},
-      {'icon': Icons.storefront, 'title': 'Cửa hàng thú cưng', 'color': Colors.pink},
-    ];
+    return ListenableBuilder(
+      listenable: RemoteConfigService(),
+      builder: (context, _) {
+        final bool isNoel = RemoteConfigService().themeEvent == 'NOEL';
+        final features = [
+          {'icon': isNoel ? Icons.card_giftcard : Icons.pets, 'title': 'Dịch vụ thú cưng', 'color': Colors.orange},
+          {'icon': isNoel ? Icons.ac_unit : Icons.book, 'title': 'Sổ điện tử', 'color': Colors.blue},
+          {'icon': isNoel ? Icons.park : Icons.calendar_month, 'title': 'Đặt lịch khám', 'color': Colors.purple},
+          {'icon': isNoel ? Icons.star : Icons.storefront, 'title': 'Cửa hàng thú cưng', 'color': Colors.pink},
+        ];
 
     final boxSize = R.isSmall(context) ? 58.0 : 65.0;
     final textWidth = R.isSmall(context) ? 72.0 : 82.0;
@@ -327,6 +380,7 @@ class _LandingScreenState extends State<LandingScreen> {
         ],
       ),
     );
+    }); // Đóng ListenableBuilder
   }
 
   Widget _buildDoctorsSection() {

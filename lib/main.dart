@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:pet_care/services/remote_config_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:pet_care/config/app_config.dart';
@@ -10,6 +12,7 @@ import 'package:pet_care/screens/vet_dashboard_screen.dart';
 import 'package:pet_care/screens/appointments_screen.dart';
 import 'package:pet_care/screens/purchase_history_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pet_care/services/analytics_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -54,6 +57,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  
+  // KHỞI TẠO REMOTE CONFIG NGAY KHI MỞ APP
+  final remoteConfig = RemoteConfigService();
+  await remoteConfig.initialize();
+
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // Yêu cầu quyền thông báo (đặc biệt quan trọng với Android 13+ và iOS)
@@ -153,6 +161,10 @@ class PetCareApp extends StatelessWidget {
     if (initialUser != null) {
       final user = initialUser!;
       final role = user['role'];
+      
+      final String? userId = user['_id'] ?? user['id'] ?? user['user']?['_id'] ?? user['user']?['id'];
+      AnalyticsService().setUser(userId, role: role);
+
       if (role == 'admin') {
         homeScreen = AdminDashboardScreen(user: user);
       } else if (role == 'vet') {
@@ -167,6 +179,9 @@ class PetCareApp extends StatelessWidget {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFFD740))),
+      navigatorObservers: [
+        FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+      ],
       home: homeScreen,
     );
   }

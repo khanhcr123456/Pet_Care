@@ -9,7 +9,8 @@ import 'package:pet_care/screens/pet_detail_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
-
+import 'package:pet_care/services/remote_config_service.dart';
+import 'package:pet_care/services/analytics_service.dart';
 
 class VetDashboardScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -37,6 +38,7 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
   void initState() {
     super.initState();
     _currentUser = widget.user;
+    AnalyticsService().logScreenView('VetDashboardScreen');
     _fetchCurrentUser();
     _fetchAppointments();
   }
@@ -119,22 +121,40 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return ListenableBuilder(
+      listenable: RemoteConfigService(),
+      builder: (context, _) {
+        final String theme = RemoteConfigService().themeEvent.toUpperCase();
+        final bool isNoel = theme == 'NOEL';
+        final bool isTet = theme == 'TET' || theme == 'TẾT';
+        final bool isHalloween = theme == 'HALLOWEEN';
+        
+        String titleDecor = '';
+        if (isNoel) titleDecor = ' 🎄';
+        if (isTet) titleDecor = ' 🧧';
+        if (isHalloween) titleDecor = ' 🎃';
+        
+        Color themeColor = const Color(0xFFF07E2B);
+        if (isNoel) themeColor = Colors.lightBlue;
+        if (isTet) themeColor = Colors.red;
+        if (isHalloween) themeColor = Colors.deepOrange;
+
+        return Scaffold(
+          backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         title: Row(
           children: [
-            Icon(Icons.medical_services, color: Color(0xFFF07E2B), size: 28),
-            SizedBox(width: 8),
+            Icon(isNoel ? Icons.star : (isTet ? Icons.local_fire_department : (isHalloween ? Icons.coronavirus : Icons.medical_services)), color: themeColor, size: 28),
+            const SizedBox(width: 8),
             RichText(
               text: TextSpan(
                 style: TextStyle(fontSize: R.sp(context, 22), fontWeight: FontWeight.bold),
-                children: const [
-                  TextSpan(text: 'Pet', style: TextStyle(color: Color(0xFF0F2E53))),
-                  TextSpan(text: 'Care', style: TextStyle(color: Color(0xFFF07E2B))),
-                  TextSpan(text: ' Clinic', style: TextStyle(color: Color(0xFF90CAF9), fontSize: 16)),
+                children: [
+                  const TextSpan(text: 'Pet', style: TextStyle(color: Color(0xFF0F2E53))),
+                  const TextSpan(text: 'Care', style: TextStyle(color: Color(0xFFF07E2B))),
+                  TextSpan(text: ' Clinic$titleDecor', style: TextStyle(color: isNoel ? const Color(0xFF90CAF9) : themeColor, fontSize: 16)),
                 ],
               ),
             ),
@@ -185,6 +205,8 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
             _fetchAllPets();
           }
           setState(() => _selectedIndex = index);
+          final screens = ['VetDashboardScreen', 'VetAppointmentsScreen', 'VetPetsScreen', 'VetScheduleScreen', 'ProfileScreen'];
+          AnalyticsService().logScreenView(screens[index]);
         },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFFF07E2B),
@@ -192,14 +214,15 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
         selectedLabelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 12)),
         unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: R.sp(context, 12)),
         items: [
-          BottomNavigationBarItem(icon: Icon(_menuItems[0]['icon']), label: 'Trang chủ'),
-          BottomNavigationBarItem(icon: Icon(_menuItems[1]['icon']), label: 'Lịch hẹn'),
-          BottomNavigationBarItem(icon: Icon(_menuItems[2]['icon']), label: 'Thú cưng'),
-          BottomNavigationBarItem(icon: Icon(_menuItems[3]['icon']), label: 'Lịch làm'),
-          BottomNavigationBarItem(icon: Icon(_menuItems[4]['icon']), label: 'Tài khoản'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.holiday_village : _menuItems[0]['icon']), label: 'Trang chủ'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.park : _menuItems[1]['icon']), label: 'Lịch hẹn'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.redeem : _menuItems[2]['icon']), label: 'Thú cưng'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.ac_unit : _menuItems[3]['icon']), label: 'Lịch làm'),
+          BottomNavigationBarItem(icon: Icon(isNoel ? Icons.star : _menuItems[4]['icon']), label: 'Tài khoản'),
         ],
       ),
     );
+    });
   }
 
   Widget _buildSchedule() {
@@ -523,11 +546,11 @@ class _VetDashboardScreenState extends State<VetDashboardScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _buildStatCard('Lịch hôm nay', _getTodayCount().toString(), Icons.calendar_today, const Color(0xFF4CA1AF))),
-                SizedBox(width: 8),
-                Expanded(child: _buildStatCard('Đang chờ', _getPendingCount().toString(), Icons.hourglass_empty, const Color(0xFFF07E2B))),
-                SizedBox(width: 8),
-                Expanded(child: _buildStatCard('Hoàn thành', _getCompletedCount().toString(), Icons.check_circle_outline, const Color(0xFF43A047))),
+                Expanded(child: _buildStatCard('Lịch hôm nay', _getTodayCount().toString(), RemoteConfigService().themeEvent == 'NOEL' ? Icons.park : Icons.calendar_today, const Color(0xFF4CA1AF))),
+                const SizedBox(width: 8),
+                Expanded(child: _buildStatCard('Đang chờ', _getPendingCount().toString(), RemoteConfigService().themeEvent == 'NOEL' ? Icons.ac_unit : Icons.hourglass_empty, const Color(0xFFF07E2B))),
+                const SizedBox(width: 8),
+                Expanded(child: _buildStatCard('Hoàn thành', _getCompletedCount().toString(), RemoteConfigService().themeEvent == 'NOEL' ? Icons.card_giftcard : Icons.check_circle_outline, const Color(0xFF43A047))),
               ],
             ),
           ),

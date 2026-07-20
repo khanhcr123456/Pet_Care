@@ -1,0 +1,35 @@
+name: SonarCloud Analysis
+
+on:
+  push:
+    branches:
+      - main # Đổi thành 'master' nếu nhánh chính của bạn tên là master
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Bắt buộc để SonarCloud lấy được thông tin lịch sử commit
+          
+      # (Tùy chọn) Nếu bạn muốn thêm việc chạy test coverage thì bỏ comment đoạn dưới đây:
+      # - name: Setup Flutter
+      #   uses: subosito/flutter-action@v2
+      #   with:
+      #     channel: 'stable'
+      # - name: Install Dependencies
+      #   run: flutter pub get
+      # - name: Run Tests with Coverage
+      #   run: flutter test --coverage
+          
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Mặc định GitHub đã cấp sẵn token này
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Bạn cần tự tạo secret này

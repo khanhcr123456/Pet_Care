@@ -78,20 +78,23 @@ class AuthService {
     }
   }
 
-  Future<AuthSession> googleLogin({required String idToken}) async {
+  Future<AuthSession> firebaseLogin({required String idToken, String fcmToken = ""}) async {
     final response = await http.post(
-      Uri.parse('${AppConfig.baseUrl}/auth/google'),
+      Uri.parse('${AppConfig.baseUrl}/firebase/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'idToken': idToken}),
+      body: jsonEncode({
+        'idToken': idToken,
+        'fcmToken': fcmToken,
+      }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Google login failed: ${response.body}');
+      throw Exception('Firebase login failed: ${response.body}');
     }
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw Exception('Invalid Google login response.');
+      throw Exception('Invalid Firebase login response.');
     }
 
     return AuthSession.fromLoginPayload(decoded);

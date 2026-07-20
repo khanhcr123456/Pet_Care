@@ -127,22 +127,10 @@ class _LandingScreenState extends State<LandingScreen> {
   }
 
   Widget _buildBody() {
-    switch (_selectedIndex) {
-      case 1:
-        return ServicesScreen(user: _currentUser);
-      case 2:
-        return PetsScreen(user: _currentUser);
-      case 3:
-        return _currentUser != null
-            ? AppointmentsScreen(user: _currentUser!, isEmbedded: true)
-            : const Center(child: Text('Vui lòng đăng nhập để xem lịch khám'));
-      case 4:
-        return ProfileScreen(
-          user: _currentUser,
-          onUserUpdated: (u) => setState(() => _currentUser = u),
-        );
-      default:
-        return SingleChildScrollView(
+    return IndexedStack(
+      index: _selectedIndex,
+      children: [
+        SingleChildScrollView(
           child: Column(
             children: [
               _buildHeroSection(),
@@ -151,8 +139,18 @@ class _LandingScreenState extends State<LandingScreen> {
               const SizedBox(height: 40),
             ],
           ),
-        );
-    }
+        ),
+        ServicesScreen(user: _currentUser),
+        PetsScreen(user: _currentUser),
+        _currentUser != null
+            ? AppointmentsScreen(user: _currentUser!, isEmbedded: true)
+            : const Center(child: Text('Vui lòng đăng nhập để xem lịch khám')),
+        ProfileScreen(
+          user: _currentUser,
+          onUserUpdated: (u) => setState(() => _currentUser = u),
+        ),
+      ],
+    );
   }
 
   Widget _buildHeroSection() {
@@ -334,50 +332,54 @@ class _LandingScreenState extends State<LandingScreen> {
   Widget _buildDoctorsSection() {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: R.hPad(context), vertical: 16),
-      child: Container(
-        padding: EdgeInsets.all(R.isSmall(context) ? 14 : 18),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF9E6),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF07E2B).withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(R.isSmall(context) ? 10 : 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF07E2B),
-                shape: BoxShape.circle,
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VetsScreen(user: _currentUser))),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.all(R.isSmall(context) ? 14 : 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF9E6),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF07E2B).withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(R.isSmall(context) ? 10 : 12),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF07E2B),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.medical_services, color: Colors.white, size: R.isSmall(context) ? 24 : 28),
               ),
-              child: Icon(Icons.medical_services, color: Colors.white, size: R.isSmall(context) ? 24 : 28),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Đội Ngũ Bác Sĩ',
-                    style: TextStyle(
-                      fontSize: R.sp(context, 16),
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF0F2E53),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Đội Ngũ Bác Sĩ',
+                      style: TextStyle(
+                        fontSize: R.sp(context, 16),
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF0F2E53),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Chuyên gia thú y hàng đầu',
-                    style: TextStyle(fontSize: R.sp(context, 12), color: const Color(0xFF4B5563)),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      'Chuyên gia thú y hàng đầu',
+                      style: TextStyle(fontSize: R.sp(context, 12), color: const Color(0xFF4B5563)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.arrow_forward_ios, color: Color(0xFFF07E2B), size: 18),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VetsScreen(user: _currentUser))),
-            ),
-          ],
+              const Padding(
+                padding: EdgeInsets.only(right: 4.0, left: 8.0),
+                child: Icon(Icons.arrow_forward_ios, color: Color(0xFFF07E2B), size: 18),
+              ),
+            ],
+          ),
         ),
       ),
     );

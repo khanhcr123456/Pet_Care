@@ -2,13 +2,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pet_care/utils/responsive.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:pet_care/screens/profile_screen.dart';
 import 'package:pet_care/services/pet_service.dart';
 import 'package:pet_care/services/product_service.dart';
 import 'package:pet_care/services/invoice_service.dart';
+import 'package:pet_care/services/booking_service.dart';
 import 'package:pet_care/screens/login_screen.dart';
 import 'package:pet_care/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pet_care/screens/admin_users_tab.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -58,36 +61,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: Center(
-              child: ClipOval(
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  color: Colors.grey[200],
-                  child: (_currentUser?['avatar'] != null && _currentUser!['avatar'].toString().trim().isNotEmpty && _currentUser!['avatar'].toString().startsWith('http'))
-                      ? Image.network(
-                          _currentUser!['avatar'],
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Image.asset('assets/images/default_vet.png', fit: BoxFit.cover),
-                        )
-                      : Image.asset('assets/images/default_vet.png', fit: BoxFit.cover),
+              child: GestureDetector(
+                onTap: () => setState(() => _currentIndex = 3),
+                child: ClipOval(
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    color: Colors.grey[200],
+                    child: (_currentUser?['avatar'] != null && _currentUser!['avatar'].toString().trim().isNotEmpty && _currentUser!['avatar'].toString().startsWith('http'))
+                        ? Image.network(
+                            _currentUser!['avatar'],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Image.asset('assets/images/default_vet.png', fit: BoxFit.cover),
+                          )
+                        : Image.asset('assets/images/default_vet.png', fit: BoxFit.cover),
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
+
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
         selectedItemColor: const Color(0xFFF07E2B),
         unselectedItemColor: Colors.grey,
+        selectedFontSize: 12,
+        unselectedFontSize: 11,
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.medical_services), label: 'Dịch vụ'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Sản phẩm'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Đơn hàng'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Người dùng'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Tài khoản'),
         ],
       ),
@@ -95,25 +105,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildBody() {
-    switch (_currentIndex) {
-      case 0:
-        return AdminServicesTab(user: widget.user);
-      case 1:
-        return AdminProductsTab(user: widget.user);
-      case 2:
-        return AdminOrdersTab(user: widget.user);
-      case 3:
-        return ProfileScreen(
+    return IndexedStack(
+      index: _currentIndex,
+      children: [
+        AdminServicesTab(user: widget.user),
+        AdminProductsTab(user: widget.user),
+        AdminOrdersTab(user: widget.user),
+        AdminUsersTab(user: widget.user),
+        ProfileScreen(
           user: _currentUser,
           onUserUpdated: (updatedUser) {
             setState(() {
               _currentUser = updatedUser;
             });
           },
-        );
-      default:
-        return const Center(child: Text('Unknown screen'));
-    }
+        ),
+      ],
+    );
   }
 }
 
@@ -137,6 +145,21 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
   void initState() {
     super.initState();
     _fetchServices();
+  }
+
+  String _formatCurrency(dynamic amountStr) {
+    num amount = num.tryParse(amountStr.toString()) ?? 0;
+    final str = amount.toInt().toString();
+    String result = '';
+    int count = 0;
+    for (int i = str.length - 1; i >= 0; i--) {
+      result = str[i] + result;
+      count++;
+      if (count % 3 == 0 && i != 0) {
+        result = '.' + result;
+      }
+    }
+    return result + ' ₫';
   }
 
   Future<void> _fetchServices() async {
@@ -547,7 +570,7 @@ class _AdminServicesTabState extends State<AdminServicesTab> {
                         children: [
                           Text(svc['name'] ?? 'Dịch vụ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: const Color(0xFF0F2E53))),
                           const SizedBox(height: 4),
-                          Text('Giá: $price VND', style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+                          Text('Giá: ${_formatCurrency(price)}', style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
                           Text(
                             'Trạng thái: ${isActive ? 'Hoạt động' : 'Tạm ngưng'}',
@@ -611,6 +634,21 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
   void initState() {
     super.initState();
     _fetchProducts();
+  }
+
+  String _formatCurrency(dynamic amountStr) {
+    num amount = num.tryParse(amountStr.toString()) ?? 0;
+    final str = amount.toInt().toString();
+    String result = '';
+    int count = 0;
+    for (int i = str.length - 1; i >= 0; i--) {
+      result = str[i] + result;
+      count++;
+      if (count % 3 == 0 && i != 0) {
+        result = '.' + result;
+      }
+    }
+    return result + ' ₫';
   }
 
   Future<void> _fetchProducts() async {
@@ -928,7 +966,7 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(existingImageUrl!, height: 150, width: double.infinity, fit: BoxFit.contain),
+                          child: Image.network(existingImageUrl, height: 150, width: double.infinity, fit: BoxFit.contain),
                         ),
                       ),
                     Row(
@@ -1074,7 +1112,7 @@ class _AdminProductsTabState extends State<AdminProductsTab> {
                         children: [
                           Text(prod['name'] ?? 'Sản phẩm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: const Color(0xFF0F2E53))),
                           const SizedBox(height: 4),
-                          Text('Giá: $price VND', style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
+                          Text('Giá: ${_formatCurrency(price)}', style: const TextStyle(color: Color(0xFFF07E2B), fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
                           Text(
                             'Kho: $stockQty',
@@ -1134,11 +1172,28 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
   bool _isLoading = true;
   List<dynamic> _invoices = [];
   Map<String, dynamic> _productCache = {};
+  String? _expandedOrderId;
+  final Map<String, GlobalKey> _itemKeys = {};
 
   @override
   void initState() {
     super.initState();
     _fetchInvoices();
+  }
+
+  String _formatCurrency(dynamic amountStr) {
+    num amount = num.tryParse(amountStr.toString()) ?? 0;
+    final str = amount.toInt().toString();
+    String result = '';
+    int count = 0;
+    for (int i = str.length - 1; i >= 0; i--) {
+      result = str[i] + result;
+      count++;
+      if (count % 3 == 0 && i != 0) {
+        result = '.' + result;
+      }
+    }
+    return result + ' ₫';
   }
 
   Future<void> _fetchInvoices() async {
@@ -1147,8 +1202,8 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
         InvoiceService().getInvoices(widget.user['token'], limit: 100),
         ProductService().getProducts(limit: 100),
       ]);
-      final data = results[0] as List<dynamic>;
-      final products = results[1] as List<dynamic>;
+      final data = results[0];
+      final products = results[1];
       
       final cache = <String, dynamic>{};
       for (var p in products) {
@@ -1159,10 +1214,20 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
       if (!mounted) return;
       _productCache = cache;
       
-      // Chỉ lấy các đơn hàng mà bên trong mảng items có chứa sản phẩm (type: 'product')
+      // Chỉ lấy các đơn hàng mà bên trong mảng items có chứa sản phẩm (type: 'product') và được tạo trong 7 ngày gần nhất
+      final now = DateTime.now();
       final productInvoices = data.where((inv) {
         final items = (inv['items'] ?? inv['products'] ?? []) as List;
-        return items.any((item) => item['type']?.toString().toLowerCase() == 'product');
+        final hasProduct = items.any((item) => item['type']?.toString().toLowerCase() == 'product');
+        if (!hasProduct) return false;
+
+        if (inv['createdAt'] != null) {
+          final dt = DateTime.tryParse(inv['createdAt'].toString());
+          if (dt != null) {
+            return dt.isAfter(now.subtract(const Duration(days: 7)));
+          }
+        }
+        return true;
       }).toList();
 
       setState(() {
@@ -1175,17 +1240,47 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
     }
   }
 
-  Future<void> _updateOrderStatus(String id, String status) async {
+  Future<void> _updateOrderStatus(String id, String status, {String? targetUserId}) async {
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => const Center(child: CircularProgressIndicator()),
       );
-      await InvoiceService().updateInvoiceStatus(widget.user['token'], id, status);
+      if (status == 'cancelled') {
+        await InvoiceService().cancelInvoice(widget.user['token'], id);
+      } else {
+        await InvoiceService().updateInvoiceStatus(widget.user['token'], id, status);
+      }
+      
+      if ((status == 'confirmed' || status == 'shipping') && targetUserId != null && targetUserId.isNotEmpty) {
+        try {
+          String notiTitle = '';
+          String notiBody = '';
+          if (status == 'confirmed') {
+            notiTitle = 'Đơn hàng đã được xác nhận';
+            notiBody = 'Đơn hàng của quý khách đã được cửa hàng xác nhận và sẽ sớm được chuẩn bị.';
+          } else if (status == 'shipping') {
+            notiTitle = 'Đơn hàng đang giao đến bạn!';
+            notiBody = 'Đơn hàng của quý khách đã được giao cho đơn vị vận chuyển. Hãy chú ý điện thoại nhé!';
+          }
+          
+          await BookingService().sendPushNotification(
+            token: widget.user['token'],
+            userId: targetUserId,
+            title: notiTitle,
+            body: notiBody,
+            data: {'screen': 'purchase_history', 'orderId': id},
+          );
+        } catch (e) {
+          debugPrint('Lỗi gửi thông báo FCM: $e');
+        }
+      }
+
       if (mounted) {
         Navigator.pop(context); // pop loading
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cập nhật trạng thái thành công')));
+        final successMsg = status == 'cancelled' ? 'Hủy đơn hàng thành công' : 'Cập nhật trạng thái thành công';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMsg)));
         setState(() {
           final index = _invoices.indexWhere((inv) => (inv['_id']?.toString() ?? inv['id']?.toString()) == id);
           if (index != -1) {
@@ -1209,10 +1304,24 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    return ListView.builder(
-      padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
-      itemCount: _invoices.length,
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: _fetchInvoices,
+      color: const Color(0xFFF07E2B),
+      child: _invoices.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                Center(
+                  child: Text('Không có đơn hàng nào.', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 16))),
+                ),
+              ],
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.all(R.isSmall(context) ? 12 : 16),
+              itemCount: _invoices.length,
+              itemBuilder: (context, index) {
         final inv = _invoices[index];
         final total = inv['total']?.toString() ?? inv['totalAmount']?.toString() ?? '0';
         final rawStatus = inv['orderStatus'] ?? inv['status'] ?? 'pending';
@@ -1221,6 +1330,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
         switch (rawStatus.toString().toLowerCase()) {
           case 'pending': status = 'Chờ xác nhận'; break;
           case 'awaiting_confirmation': status = 'Chờ xác nhận'; break;
+          case 'paid': status = 'Chờ xác nhận'; break;
           case 'confirmed': status = 'Đã xác nhận'; break;
           case 'preparing': status = 'Đang chuẩn bị'; break;
           case 'shipping': status = 'Đang giao'; break;
@@ -1240,6 +1350,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
         switch (rawStatusLower) {
           case 'pending':
           case 'awaiting_confirmation':
+          case 'paid':
             nextStepText = 'Xác nhận đơn';
             nextStepStatus = 'confirmed';
             nextStepColor = Colors.blue;
@@ -1265,6 +1376,17 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
             nextStepStatus = 'completed';
             nextStepColor = Colors.green;
             break;
+          case 'cancelled':
+            nextStepText = null;
+            nextStepStatus = null;
+            nextStepColor = Colors.red;
+            break;
+          case 'returned':
+          case 'return_requested':
+            nextStepText = null;
+            nextStepStatus = null;
+            nextStepColor = Colors.purple;
+            break;
         }
         
         bool canCancel = !['completed', 'cancelled', 'returned'].contains(rawStatusLower);
@@ -1272,8 +1394,8 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
         final items = (inv['items'] ?? inv['products'] ?? []) as List;
         
         final userObj = inv['user'] is Map ? inv['user'] : {};
-        final customerName = inv['receiverName'] ?? inv['customerName'] ?? inv['customer'] ?? inv['name'] ?? inv['fullName'] ?? userObj['name'] ?? userObj['fullName'] ?? userObj['username'] ?? 'Không rõ';
-        final customerPhone = inv['phone'] ?? inv['customerPhone'] ?? userObj['phone'] ?? 'Không rõ';
+        final customerName = inv['recipientName'] ?? inv['receiverName'] ?? inv['customerName'] ?? inv['customer'] ?? inv['name'] ?? inv['fullName'] ?? userObj['name'] ?? userObj['fullName'] ?? userObj['username'] ?? 'Không rõ';
+        final customerPhone = inv['recipientPhone'] ?? inv['phone'] ?? inv['customerPhone'] ?? userObj['phone'] ?? 'Không rõ';
         
         String address = 'Không rõ';
         final sa = inv['address'] ?? inv['shippingAddress'];
@@ -1284,8 +1406,28 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
         } else if (sa != null && sa.toString().trim().isNotEmpty) {
           address = sa.toString().trim();
         }
+
+        final rawPaymentMethod = inv['paymentMethod']?.toString().toLowerCase();
+        final paymentStatusStr = inv['paymentStatus']?.toString().toLowerCase();
+        final isPaid = inv['isPaid'] == true || paymentStatusStr == 'paid' || paymentStatusStr == 'success' || paymentStatusStr == 'completed' || rawStatusLower == 'paid';
         
+        String paymentMethodText = 'Thanh toán trực tiếp';
+        if (rawPaymentMethod == 'cod') {
+          paymentMethodText = 'Thanh toán khi nhận hàng';
+        } else if (rawPaymentMethod == 'bank') {
+          paymentMethodText = isPaid ? 'Chuyển khoản (Đã thanh toán)' : 'Chuyển khoản (Chưa thanh toán)';
+        } else if (rawPaymentMethod != null && rawPaymentMethod.isNotEmpty) {
+          paymentMethodText = inv['paymentMethod'].toString();
+        }
+        
+        final orderIdentifier = inv['_id']?.toString() ?? inv['id']?.toString() ?? index.toString();
+        if (!_itemKeys.containsKey(orderIdentifier)) {
+          _itemKeys[orderIdentifier] = GlobalKey();
+        }
+        final itemGlobalKey = _itemKeys[orderIdentifier]!;
+
         return Container(
+          key: itemGlobalKey,
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1298,6 +1440,28 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
+              key: Key('tile_${inv['_id'] ?? inv['id'] ?? index}_${_expandedOrderId == (inv['_id']?.toString() ?? inv['id']?.toString() ?? index.toString())}'),
+              initiallyExpanded: _expandedOrderId == (inv['_id']?.toString() ?? inv['id']?.toString() ?? index.toString()),
+              onExpansionChanged: (expanded) {
+                final orderIdStr = inv['_id']?.toString() ?? inv['id']?.toString() ?? index.toString();
+                if (expanded) {
+                  setState(() => _expandedOrderId = orderIdStr);
+                  Future.delayed(const Duration(milliseconds: 50), () {
+                    if (itemGlobalKey.currentContext != null) {
+                      Scrollable.ensureVisible(
+                        itemGlobalKey.currentContext!,
+                        duration: const Duration(milliseconds: 100),
+                        curve: Curves.easeOut,
+                        alignment: 0.02,
+                      );
+                    }
+                  });
+                } else {
+                  if (_expandedOrderId == orderIdStr) {
+                    setState(() => _expandedOrderId = null);
+                  }
+                }
+              },
               tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               childrenPadding: EdgeInsets.zero,
               title: Column(
@@ -1308,7 +1472,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Đơn hàng: #${(inv['_id']?.toString() ?? inv['id']?.toString() ?? '')}',
+                          'Đơn hàng: #${(inv['_id']?.toString() ?? inv['id']?.toString() ?? '').length > 8 ? (inv['_id']?.toString() ?? inv['id']?.toString() ?? '').substring(0, 8).toUpperCase() : (inv['_id']?.toString() ?? inv['id']?.toString() ?? '').toUpperCase()}',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14), color: const Color(0xFF0F2E53)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1330,12 +1494,18 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                 
+                  if (inv['createdAt'] != null)
+                    Text(
+                      inv['createdAt'] != null ? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.tryParse(inv['createdAt'].toString())?.toLocal() ?? DateTime.now()) : '',
+                      style: TextStyle(fontSize: R.sp(context, 12), color: Colors.grey[600]),
+                    )
+                  else
+                    const SizedBox.shrink(),
                 ],
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 8.0),
-                child: Text('$total VND', style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
+                child: Text(_formatCurrency(total), style: TextStyle(color: const Color(0xFFF07E2B), fontWeight: FontWeight.bold, fontSize: R.sp(context, 14))),
               ),
               iconColor: const Color(0xFF555555),
               collapsedIconColor: const Color(0xFF555555),
@@ -1352,6 +1522,8 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                     Text('SĐT: $customerPhone', style: TextStyle(fontSize: R.sp(context, 14), color: Color(0xFF333333))),
                     SizedBox(height: 4),
                     Text('Địa chỉ: $address', style: TextStyle(fontSize: R.sp(context, 14), color: Color(0xFF333333))),
+                    SizedBox(height: 4),
+                    Text('Phương thức: $paymentMethodText', style: TextStyle(fontSize: R.sp(context, 14), color: Color(0xFF333333))),
                     const Divider(color: Colors.black12, thickness: 1, height: 24),
                     const Text('Chi tiết sản phẩm:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2E53), fontSize: 14)),
                     const SizedBox(height: 12),
@@ -1410,7 +1582,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                               )
                             ),
                             const SizedBox(width: 16),
-                            Text('$price VND', style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold, color: const Color(0xFF333333))),
+                            Text(_formatCurrency(price), style: TextStyle(fontSize: R.sp(context, 14), fontWeight: FontWeight.bold, color: const Color(0xFF333333))),
                           ],
                         ),
                       );
@@ -1420,9 +1592,26 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Thành tiền:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFF0F2E53))),
-                        Text('$total VND', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFFF07E2B))),
+                        Text(_formatCurrency(total), style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 16), color: Color(0xFFF07E2B))),
                       ],
                     ),
+                    if (rawPaymentMethod == 'bank' && !isPaid)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'CẢNH BÁO: Đơn hàng chuyển khoản nhưng CHƯA thấy thanh toán. Vui lòng kiểm tra kỹ hoặc gọi khách trước khi Xác nhận đơn!',
+                                style: TextStyle(color: Colors.red, fontSize: R.sp(context, 12), fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1431,7 +1620,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    if (nextStepText != null) ...[
+                    if (nextStepText != null && !(rawPaymentMethod == 'bank' && !isPaid)) ...[
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
@@ -1442,7 +1631,9 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
                           ),
                           onPressed: () {
                             if (nextStepStatus != null) {
-                              _updateOrderStatus(inv['_id'], nextStepStatus!);
+                              final userObj = inv['user'] is Map ? inv['user'] : {};
+                              final uid = inv['userId']?.toString() ?? userObj['_id']?.toString() ?? userObj['id']?.toString();
+                              _updateOrderStatus(inv['_id'], nextStepStatus!, targetUserId: uid);
                             }
                           },
                           child: Text(nextStepText, style: TextStyle(color: Colors.white, fontSize: R.sp(context, 15), fontWeight: FontWeight.bold)),
@@ -1473,6 +1664,7 @@ class _AdminOrdersTabState extends State<AdminOrdersTab> {
           ),
         );
       },
+    ),
     );
   }
 }

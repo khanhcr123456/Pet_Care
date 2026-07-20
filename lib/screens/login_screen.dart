@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:pet_care/screens/landing_screen.dart';
@@ -22,10 +24,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _authService = AuthService();
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // clientId: Mã Client ID tĩnh của Android 
-    clientId: '888854265843-klrcdc77tq9rlnrv4hv3vu9n0ajvuu3c.apps.googleusercontent.com',
-    // serverClientId: Mã Client ID của Web (dành cho API)
-    serverClientId: '888854265843-5f9b8mqjufksrvrflph18sncg13tth81.apps.googleusercontent.com',
+    // serverClientId phải là Web Client ID của Firebase project hiện tại
+    serverClientId: '988271144297-d2mno63bas8po4a3q9rls33ch8l72nba.apps.googleusercontent.com',
   );
   bool _isLoading = false;
   bool _isGoogleLoading = false;
@@ -133,7 +133,26 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       debugPrint('[GoogleLogin] Gửi idToken lên backend...');
-      final session = await _authService.googleLogin(idToken: idToken);
+
+      // Dùng firebase_auth để sign in và lấy Firebase ID Token thật
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final firebaseUserCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final firebaseIdToken = await firebaseUserCredential.user!.getIdToken();
+      debugPrint('[GoogleLogin] Firebase ID Token OK: ${firebaseIdToken!.substring(0, 30)}...');
+
+      // Lấy FCM Token để nhận thông báo
+      String? fcmToken;
+      try {
+        fcmToken = await FirebaseMessaging.instance.getToken();
+        debugPrint('[FCM] Token: $fcmToken');
+      } catch (e) {
+        debugPrint('[FCM] Lỗi lấy token: $e');
+      }
+
+      final session = await _authService.firebaseLogin(idToken: firebaseIdToken, fcmToken: fcmToken ?? '');
       debugPrint('[GoogleLogin] Backend trả về token OK. Role: ${session.role}');
 
       final userInfo = session.userInfo;

@@ -3,6 +3,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:pet_care/services/invoice_service.dart';
 import 'package:pet_care/services/product_service.dart';
 import 'package:pet_care/utils/responsive.dart';
+import 'package:pet_care/screens/store_screen.dart';
 import 'package:intl/intl.dart';
 
 class PurchaseHistoryScreen extends StatefulWidget {
@@ -123,7 +124,31 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFFF07E2B)))
           : _invoices.isEmpty
-              ? Center(child: Text('Chưa có đơn hàng nào', style: TextStyle(color: Colors.grey, fontSize: R.sp(context, 14))))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_bag_outlined, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text('Bạn chưa có đơn hàng nào', style: TextStyle(color: Colors.grey[600], fontSize: R.sp(context, 16))),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => StoreScreen(user: widget.user)),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF07E2B),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        ),
+                        child: Text('Mua sắm ngay', style: TextStyle(color: Colors.white, fontSize: R.sp(context, 14), fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
                   padding: EdgeInsets.all(hPad),
                   itemCount: _invoices.length,
@@ -135,7 +160,7 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                     final date = dateObj != null ? DateFormat('dd/MM/yyyy HH:mm').format(dateObj) : '';
                         
                     Color statusColor = Colors.orange;
-                    String statusText = 'Chờ xử lý';
+                    String statusText = 'Chờ xác nhận';
                     if (status == 'completed' || status == 'success') {
                       statusColor = Colors.green;
                       statusText = 'Hoàn thành';
@@ -154,18 +179,27 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                     } else if (status == 'delivered') {
                       statusColor = Colors.teal;
                       statusText = 'Đã giao';
+                    } else if (status == 'paid') {
+                      statusColor = Colors.orange;
+                      statusText = 'Chờ xác nhận';
                     }
 
                     final address = invoice['address'] ?? 'Chưa cập nhật';
+                    final customerName = invoice['recipientName'] ?? invoice['receiverName'] ?? invoice['customerName'] ?? widget.user['name'] ?? widget.user['username'] ?? 'Không rõ';
+                    final customerPhone = invoice['recipientPhone'] ?? invoice['phone'] ?? invoice['customerPhone'] ?? widget.user['phone'] ?? 'Không rõ';
+                    
                     final orderId = invoice['_id'] ?? invoice['id'] ?? '';
                     final shortOrderId = orderId.toString().length > 8 ? orderId.toString().substring(0, 8).toUpperCase() : orderId.toString().toUpperCase();
                     
                     final rawPaymentMethod = invoice['paymentMethod']?.toString().toLowerCase();
+                    final paymentStatusStr = invoice['paymentStatus']?.toString().toLowerCase();
+                    final isPaid = invoice['isPaid'] == true || paymentStatusStr == 'paid' || paymentStatusStr == 'success' || paymentStatusStr == 'completed' || status == 'paid';
+
                     String paymentMethodText = 'Thanh toán trực tiếp'; // Mặc định nếu API không trả về
                     if (rawPaymentMethod == 'cod') {
                       paymentMethodText = 'Thanh toán khi nhận hàng';
                     } else if (rawPaymentMethod == 'bank') {
-                      paymentMethodText = 'Chuyển khoản';
+                      paymentMethodText = isPaid ? 'Chuyển khoản (Đã thanh toán)' : 'Chuyển khoản (Chưa thanh toán)';
                     } else if (rawPaymentMethod != null && rawPaymentMethod.isNotEmpty) {
                       paymentMethodText = invoice['paymentMethod'].toString();
                     }
@@ -217,7 +251,29 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                             SizedBox(height: R.isSmall(context) ? 8 : 12),
                             Text('Đơn hàng: #$shortOrderId', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 14), color: const Color(0xFF0F2E53))),
                             const SizedBox(height: 6),
-                            Text('Thanh toán: $paymentMethodText', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
+                            Text('Người nhận: $customerName', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
+                            const SizedBox(height: 4),
+                            Text('Điện thoại: $customerPhone', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text('Phương thức: ', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
+                                if (rawPaymentMethod == 'bank')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: isPaid ? Colors.green.shade50 : Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      isPaid ? 'Chuyển khoản (Đã thanh toán)' : 'Chuyển khoản (Chưa Thanh Toán)',
+                                      style: TextStyle(color: isPaid ? Colors.green : Colors.red, fontSize: R.sp(context, 11), fontWeight: FontWeight.bold),
+                                    ),
+                                  )
+                                else
+                                  Text(paymentMethodText, style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
+                              ],
+                            ),
                             const SizedBox(height: 4),
                             Text('Địa chỉ: $address', style: TextStyle(fontSize: R.sp(context, 12), color: Colors.black87)),
                             SizedBox(height: R.isSmall(context) ? 8 : 12),
@@ -306,7 +362,7 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                                 Text('Số tiền: ${formatCurrency(total)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: R.sp(context, 15), color: const Color(0xFFF07E2B))),
                                 Row(
                                   children: [
-                                    if (status == 'pending' && rawPaymentMethod == 'bank')
+                                    if ((status == 'pending' || status == 'awaiting_confirmation') && rawPaymentMethod == 'bank' && !isPaid)
                                       Padding(
                                         padding: const EdgeInsets.only(right: 8),
                                         child: SizedBox(
@@ -367,7 +423,7 @@ class _PurchaseHistoryScreenState extends State<PurchaseHistoryScreen> {
                                         ),
                                       ),
 
-                                    if (status == 'pending')
+                                    if ((status == 'pending' || status == 'awaiting_confirmation') && (rawPaymentMethod != 'bank' || !isPaid))
                                       SizedBox(
                                         height: 30,
                                         child: OutlinedButton(

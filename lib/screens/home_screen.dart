@@ -58,9 +58,24 @@ class HomeScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  ),
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Xác nhận đăng xuất'),
+                        content: const Text('Bạn có chắc chắn muốn đăng xuất không?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Không')),
+                          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Đăng xuất', style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: R.isSmall(context) ? 12 : 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
